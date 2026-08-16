@@ -28,6 +28,17 @@ const date = value => {
 };
 const qs = values => new URLSearchParams(Object.entries(values).filter(([, value]) => value !== '' && value !== null && value !== undefined)).toString();
 
+function uuid() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
 function notify(message, kind = 'info') {
   toast.textContent = message;
   toast.dataset.kind = kind;
@@ -41,7 +52,7 @@ async function request(path, {method = 'GET', body, form = false, idempotent = f
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
   if (state.restaurantHint) headers['X-Vondo-Restaurant'] = state.restaurantHint;
   if (!form && body !== undefined) headers['Content-Type'] = 'application/json';
-  if (idempotent) headers['Idempotency-Key'] = crypto.randomUUID();
+  if (idempotent) headers['Idempotency-Key'] = uuid();
   let response;
   try {
     response = await fetch(path, {method, headers, body: body === undefined ? undefined : (form ? body : JSON.stringify(body))});
