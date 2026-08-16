@@ -92,5 +92,5 @@ class MobileFlavor {
   static const appName = String.fromEnvironment('VONDO_APP_NAME', defaultValue: 'Vondo');
   static const scheme = String.fromEnvironment('VONDO_URL_SCHEME', defaultValue: 'vondo');
   static const appHost = String.fromEnvironment('VONDO_APP_HOST');
-  static const apiUrl = String.fromEnvironment('VONDO_API_URL', defaultValue: 'http://10.0.2.2:8081/api');
+  static const apiUrl = String.fromEnvironment('VONDO_API_URL', defaultValue: 'http://185.203.116.172:8081/api');
 }

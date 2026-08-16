@@ -25,7 +25,7 @@ class CustomerApi extends TenantApiClient {
         baseUrl: (baseUrl ??
                   const String.fromEnvironment(
                     'VONDO_API_URL',
-                    defaultValue: 'http://10.0.2.2:8081/api',
+                    defaultValue: 'http://185.203.116.172:8081/api',
                   ))
               .trim()
               .replaceFirst(RegExp(r'/+$'), ''),
