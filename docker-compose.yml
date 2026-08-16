@@ -1,0 +1,205 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tastyigniter-app
+    container_name: tastyigniter_app
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - .:/var/www/html
+      # Keep Composer dependencies on Docker's Linux filesystem. Reading the
+      # host vendor tree through a Windows bind mount makes Laravel bootstrap
+      # slow enough for PHP-FPM and Nginx to time out.
+      - vendor_data:/var/www/html/vendor
+    environment:
+      DB_HOST: db
+      REDIS_HOST: redis
+      CACHE_STORE: redis
+      CACHE_DRIVER: redis
+      QUEUE_CONNECTION: redis
+      SESSION_DRIVER: redis
+      VONDO_ALLOW_TENANT_HEADER: "true"
+      VONDO_API_HEALTH_URL: http://webserver/api/v1/health/live
+      VONDO_STOREFRONT_HEALTH_URL: http://storefront:3000/health
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "php-fpm -t"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - tastyigniter-net
+
+  webserver:
+    image: nginx:alpine
+    container_name: tastyigniter_webserver
+    restart: unless-stopped
+    ports:
+      - "${APP_HTTP_PORT:-8081}:80"
+    volumes:
+      - .:/var/www/html
+      - ./docker/nginx/conf.d/default.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - tastyigniter-net
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nginx -t >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  queue:
+    image: tastyigniter-app
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: ["php", "artisan", "queue:work", "redis", "--queue=builds,notifications,default", "--sleep=2", "--tries=3", "--timeout=900"]
+    volumes:
+      - .:/var/www/html
+      - vendor_data:/var/www/html/vendor
+    environment:
+      DB_HOST: db
+      REDIS_HOST: redis
+      CACHE_STORE: redis
+      CACHE_DRIVER: redis
+      QUEUE_CONNECTION: redis
+      SESSION_DRIVER: redis
+      VONDO_ALLOW_TENANT_HEADER: "true"
+      VONDO_API_HEALTH_URL: http://webserver/api/v1/health/live
+      VONDO_STOREFRONT_HEALTH_URL: http://storefront:3000/health
+    depends_on:
+      app:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - tastyigniter-net
+    stop_grace_period: 30s
+
+  scheduler:
+    image: tastyigniter-app
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: ["php", "artisan", "schedule:work"]
+    volumes:
+      - .:/var/www/html
+      - vendor_data:/var/www/html/vendor
+    environment:
+      DB_HOST: db
+      REDIS_HOST: redis
+      CACHE_STORE: redis
+      CACHE_DRIVER: redis
+      QUEUE_CONNECTION: redis
+      SESSION_DRIVER: redis
+      VONDO_ALLOW_TENANT_HEADER: "true"
+      VONDO_API_HEALTH_URL: http://webserver/api/v1/health/live
+      VONDO_STOREFRONT_HEALTH_URL: http://storefront:3000/health
+    depends_on:
+      app:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - tastyigniter-net
+    stop_grace_period: 30s
+
+  storefront:
+    build:
+      context: ./storefront
+      dockerfile: Dockerfile
+    image: vondo-storefront
+    restart: unless-stopped
+    ports:
+      - "${STOREFRONT_HTTP_PORT:-3000}:3000"
+    environment:
+      NUXT_API_INTERNAL_BASE: http://webserver/api
+      NUXT_DEFAULT_RESTAURANT: ${VONDO_DEFAULT_RESTAURANT:-default}
+    networks:
+      - tastyigniter-net
+    depends_on:
+      webserver:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  db:
+    image: mysql:8.0
+    container_name: tastyigniter_db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-tastyigniter}
+      MYSQL_USER: ${DB_USERNAME:-igniter}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:${DB_FORWARD_PORT:-3307}:3306"
+    volumes:
+      - dbdata:/var/lib/mysql
+    networks:
+      - tastyigniter-net
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$$MYSQL_USER -p$$MYSQL_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # Ephemeral, isolated database used only by the clean-schema verification
+  # profile. Its tmpfs disappears with the container and never touches dbdata.
+  db_clean:
+    image: mysql:8.0
+    profiles: ["verification"]
+    environment:
+      MYSQL_DATABASE: vondo_clean
+      MYSQL_USER: vondo_clean
+      MYSQL_PASSWORD: verification-only
+      MYSQL_ROOT_PASSWORD: verification-root-only
+    tmpfs:
+      - /var/lib/mysql
+    networks:
+      - tastyigniter-net
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$$MYSQL_USER -p$$MYSQL_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    networks:
+      - tastyigniter-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  dbdata:
+  redisdata:
+  vendor_data:
+
+networks:
+  tastyigniter-net:
+    driver: bridge
