@@ -140,14 +140,16 @@ function renderLogin(message = '') {
         <button data-mode="platform" class="${state.mode === 'platform' ? 'active' : ''}">Super Admin</button>
       </div>
       ${message ? `<div class="notice error">${esc(message)}</div>` : ''}
-      ${state.mode === 'owner' ? '<div class="notice">Use the restaurant domain when signing into a non-default tenant.</div>' : '<div class="notice secure">Platform access is restricted to Super Admin accounts.</div>'}
+      ${state.mode === 'owner' ? '<div class="notice">Use your restaurant domain when signing into a multi-tenant workspace.</div>' : '<div class="notice secure">Platform access is restricted to Super Admin accounts.</div>'}
       <form id="login-form" class="form-grid">
-        <div class="field full"><label for="email">Email</label><input id="email" type="email" autocomplete="username" required></div>
-        <div class="field full"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required minlength="8"></div>
+        <div class="field full"><label for="email">Email address</label><input id="email" type="email" autocomplete="username" placeholder="owner@restaurant.com" required></div>
+        <div class="field full"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" placeholder="••••••••" required minlength="8"></div>
         ${state.mode === 'platform' ? '<div class="field full"><label for="mfa-code">Authenticator or recovery code</label><input id="mfa-code" autocomplete="one-time-code" inputmode="numeric" maxlength="32" placeholder="Required when MFA is enabled"></div>' : ''}
-        <button class="btn primary full" type="submit">Sign in securely</button>
+        <div class="form-actions full">
+          <button class="btn primary full" type="submit">Sign in securely</button>
+        </div>
       </form>
-      ${state.mode === 'owner' ? '<div class="quick-actions"><button class="btn" id="register-owner" type="button">Create restaurant account</button><button class="btn ghost" id="forgot-password" type="button">Forgot password</button><button class="btn ghost" id="resend-verification" type="button">Resend verification</button></div>' : ''}
+      ${state.mode === 'owner' ? '<div class="quick-actions"><button class="btn outline full" id="register-owner" type="button">Create restaurant account</button><div class="sub-links"><button class="subtle-btn" id="forgot-password" type="button">Forgot password?</button><span class="dot-sep">•</span><button class="subtle-btn" id="resend-verification" type="button">Resend verification</button></div></div>' : ''}
     </section>
   </main>`;
   document.querySelectorAll('[data-mode]').forEach(button => button.onclick = () => setMode(button.dataset.mode));
@@ -158,17 +160,20 @@ function renderLogin(message = '') {
 }
 
 function renderOwnerRegistration() {
-  app.innerHTML = `<main class="login"><section class="card login-card">
+  app.innerHTML = `<main class="login"><section class="card login-card register-card">
     <div class="login-head"><span class="brand-mark">V</span><span class="eyebrow">Start with Vondo</span><h1>Create your restaurant</h1><p>Your isolated dashboard, storefront, and mobile configuration are provisioned together.</p></div>
     <form id="registration-form" class="form-grid">
-      <div class="field"><label>Your name</label><input name="owner_name" required maxlength="80" autocomplete="name"></div>
-      <div class="field"><label>Restaurant name</label><input name="restaurant_name" required maxlength="80"></div>
-      <div class="field full"><label>Email</label><input name="email" type="email" required autocomplete="email"></div>
-      <div class="field"><label>Password</label><input name="password" type="password" required minlength="10" autocomplete="new-password"></div>
-      <div class="field"><label>Confirm password</label><input name="password_confirmation" type="password" required minlength="10" autocomplete="new-password"></div>
-      <div class="field"><label>Timezone</label><input name="timezone" value="Africa/Casablanca" required></div>
-      <div class="field"><label>Currency</label><input name="currency_code" value="MAD" minlength="3" maxlength="3" required></div>
-      <button class="btn primary full" type="submit">Create restaurant</button><button class="btn full" id="back-login" type="button">Back to sign in</button>
+      <div class="field"><label>Your name</label><input name="owner_name" required maxlength="80" autocomplete="name" placeholder="John Doe"></div>
+      <div class="field"><label>Restaurant name</label><input name="restaurant_name" required maxlength="80" placeholder="My Restaurant"></div>
+      <div class="field full"><label>Email address</label><input name="email" type="email" required autocomplete="email" placeholder="owner@restaurant.com"></div>
+      <div class="field"><label>Password</label><input name="password" type="password" required minlength="10" autocomplete="new-password" placeholder="Min 10 characters"></div>
+      <div class="field"><label>Confirm password</label><input name="password_confirmation" type="password" required minlength="10" autocomplete="new-password" placeholder="Re-enter password"></div>
+      <div class="field"><label>Timezone</label><input name="timezone" value="Africa/Casablanca" required placeholder="Africa/Casablanca"></div>
+      <div class="field"><label>Currency</label><input name="currency_code" value="MAD" minlength="3" maxlength="3" required placeholder="MAD"></div>
+      <div class="form-actions full">
+        <button class="btn primary full" type="submit">Create restaurant</button>
+        <button class="btn outline full" id="back-login" type="button">Back to sign in</button>
+      </div>
     </form>
   </section></main>`;
   document.querySelector('#back-login').onclick = () => renderLogin();
@@ -177,7 +182,7 @@ function renderOwnerRegistration() {
     try {
       const result = await request('/api/v1/owner/register', {method: 'POST', body: Object.fromEntries(new FormData(event.currentTarget)), idempotent: true});
       state.restaurantHint = result.data.restaurant_id;
-      renderLogin('Restaurant created. Check your email to verify the owner account before signing in.');
+      renderLogin('Restaurant created successfully. You can now sign in.');
     } catch (error) { notify(error.message, 'error'); button.disabled = false; }
   };
 }
@@ -189,9 +194,11 @@ function renderOwnerAccountForm(action, token = '', message = '') {
     <div class="login-head"><span class="brand-mark">V</span><span class="eyebrow">Restaurant owner</span><h1>${esc(title)}</h1><p>${reset ? 'Use a strong password you do not use elsewhere.' : 'Enter the email address for this restaurant.'}</p></div>
     ${message ? `<div class="notice">${esc(message)}</div>` : ''}
     <form id="account-form" class="form-grid">
-      ${reset ? `<input type="hidden" name="token" value="${esc(token)}"><div class="field full"><label>New password</label><input name="password" type="password" autocomplete="new-password" minlength="10" required></div><div class="field full"><label>Confirm password</label><input name="password_confirmation" type="password" autocomplete="new-password" minlength="10" required></div>` : '<div class="field full"><label>Email</label><input name="email" type="email" autocomplete="email" required></div>'}
-      <button class="btn primary full" type="submit">${reset ? 'Update password' : 'Send email'}</button>
-      <button class="btn full" id="back-login" type="button">Back to sign in</button>
+      ${reset ? `<input type="hidden" name="token" value="${esc(token)}"><div class="field full"><label>New password</label><input name="password" type="password" autocomplete="new-password" minlength="10" required></div><div class="field full"><label>Confirm password</label><input name="password_confirmation" type="password" autocomplete="new-password" minlength="10" required></div>` : '<div class="field full"><label>Email address</label><input name="email" type="email" autocomplete="email" required placeholder="owner@restaurant.com"></div>'}
+      <div class="form-actions full">
+        <button class="btn primary full" type="submit">${reset ? 'Update password' : 'Send email'}</button>
+        <button class="btn outline full" id="back-login" type="button">Back to sign in</button>
+      </div>
     </form>
   </section></main>`;
   document.querySelector('#back-login').onclick = () => renderLogin();
