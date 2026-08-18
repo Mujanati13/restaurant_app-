@@ -2,6 +2,7 @@
  * TastyIgniter API Client
  * Wraps REST calls to /api/* with token handling and JSON:API response normalization.
  */
+function _uuid() { return (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); }); }
 
 const API_BASE = '/api';
 
@@ -407,7 +408,7 @@ class ApiClient {
     try {
       const res = await this.request('/v1/storefront/orders', {
         method: 'POST',
-        headers: { 'Idempotency-Key': crypto.randomUUID() },
+        headers: { 'Idempotency-Key': _uuid() },
         body: JSON.stringify(orderData)
       });
       if (res.data) return { success: true, orderId: res.data.id };
@@ -422,7 +423,7 @@ class ApiClient {
     try {
       const res = await this.request('/v1/storefront/reservations', {
         method: 'POST',
-        headers: { 'Idempotency-Key': crypto.randomUUID() },
+        headers: { 'Idempotency-Key': _uuid() },
         body: JSON.stringify(reservationData)
       });
       if (res.data) return { success: true, reservationId: res.data.id };

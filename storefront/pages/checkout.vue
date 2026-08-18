@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Location, PaymentMethod } from '~/types/storefront'
+import { generateUUID } from '~/utils/uuid'
 
 const tenant = useNuxtData<any>('tenant-bootstrap')
 const api = useStorefrontApi()
@@ -133,7 +134,7 @@ async function submit() {
   try {
     const result = await api.request<any>('/orders', {
       method: 'POST',
-      headers: { 'Idempotency-Key': crypto.randomUUID() },
+      headers: { 'Idempotency-Key': generateUUID() },
       body,
     })
     success.value = result.data.id
