@@ -139,6 +139,8 @@ const ownerNavItems = [
   { key: 'team', label: 'Team', icon: 'badge', endpoint: '/api/v1/owner/team' },
   { key: 'restaurant', label: 'Restaurant settings', icon: 'settings' },
   { key: 'brand', label: 'Brand & storefront', icon: 'palette' },
+  { key: 'pages', label: 'Pages', icon: 'article' },
+  { key: 'media', label: 'Media gallery', icon: 'photo_library' },
   { key: 'domains', label: 'Domains', icon: 'language' },
   { key: 'subscription', label: 'Subscription', icon: 'credit_card' },
   { key: 'builds', label: 'App builds', icon: 'smartphone' },
@@ -381,6 +383,12 @@ function App() {
           data = res.data;
         } else if (view === 'builds') {
           const res = await request('/api/v1/owner/app-builds');
+          data = res.data;
+        } else if (view === 'pages') {
+          const res = await request('/api/v1/owner/pages');
+          data = res.data;
+        } else if (view === 'media') {
+          const res = await request('/api/v1/owner/media');
           data = res.data;
         }
       } else if (mode === 'vendor') {
@@ -1137,6 +1145,14 @@ function ViewContent({
 
     if (currentView === 'builds') {
       return h(BuildsView, { builds: data || [], request, notify, refreshView });
+    }
+
+    if (currentView === 'pages') {
+      return h(PagesView, { pages: data || [], request, notify, refreshView });
+    }
+
+    if (currentView === 'media') {
+      return h(MediaGalleryView, { assets: data || [], request, notify, refreshView });
     }
   }
 
@@ -2272,6 +2288,7 @@ function TeamView({ data, ownerBootstrap, request, notify, refreshView }) {
   const locations = ownerBootstrap?.locations || [];
 
   const [editMemberModal, setEditMemberModal] = useState({ open: false, member: null });
+  const [editRoleModal, setEditRoleModal] = useState({ open: false, role: null });
 
   return h(Box, null,
     h(Box, { sx: { mb: 3 } },
@@ -2404,19 +2421,26 @@ function TeamView({ data, ownerBootstrap, request, notify, refreshView }) {
                         h(Typography, { variant: 'body2', fontWeight: 700 }, r.name),
                         h(Typography, { variant: 'caption', color: 'text.secondary' }, `${r.base_role} • ${r.permissions.length} permissions`)
                       ),
-                      h(Button, {
-                        size: 'small',
-                        color: 'error',
-                        onClick: async () => {
-                          try {
-                            await request(`/api/v1/owner/team-access/roles/${r.id}`, { method: 'DELETE' });
-                            notify('Role deleted.', 'success');
-                            refreshView();
-                          } catch (err) {
-                            notify(err.message, 'error');
+                      h(Stack, { direction: 'row', spacing: 1 },
+                        h(Button, {
+                          size: 'small',
+                          variant: 'outlined',
+                          onClick: () => setEditRoleModal({ open: true, role: r })
+                        }, 'Edit'),
+                        h(Button, {
+                          size: 'small',
+                          color: 'error',
+                          onClick: async () => {
+                            try {
+                              await request(`/api/v1/owner/team-access/roles/${r.id}`, { method: 'DELETE' });
+                              notify('Role deleted.', 'success');
+                              refreshView();
+                            } catch (err) {
+                              notify(err.message, 'error');
+                            }
                           }
-                        }
-                      }, 'Delete')
+                        }, 'Delete')
+                      )
                     )
                   )
             ),
@@ -2523,6 +2547,55 @@ function TeamView({ data, ownerBootstrap, request, notify, refreshView }) {
         h(DialogActions, null,
           h(Button, { onClick: () => setEditMemberModal({ open: false, member: null }) }, 'Cancel'),
           h(Button, { type: 'submit', variant: 'contained', color: 'primary' }, 'Save access')
+        )
+      )
+    ),
+
+    // Edit Role Dialog
+    editRoleModal.open && h(Dialog, { open: true, onClose: () => setEditRoleModal({ open: false, role: null }), maxWidth: 'sm', fullWidth: true },
+      h('form', {
+        onSubmit: async (e) => {
+          e.preventDefault();
+          const form = e.currentTarget;
+          const dataObj = Object.fromEntries(new FormData(form));
+          dataObj.permissions = [...form.querySelectorAll('[name="edit_permissions"]:checked')].map(i => i.value);
+          delete dataObj.edit_permissions;
+          try {
+            await request(`/api/v1/owner/team-access/roles/${editRoleModal.role.id}`, { method: 'PATCH', body: dataObj });
+            notify('Role updated.', 'success');
+            setEditRoleModal({ open: false, role: null });
+            refreshView();
+          } catch (err) {
+            notify(err.message, 'error');
+          }
+        }
+      },
+        h(DialogTitle, null, 'Edit custom role'),
+        h(DialogContent, null,
+          h(Stack, { spacing: 2, mt: 1 },
+            h(TextField, { label: 'Role Name', name: 'name', defaultValue: editRoleModal.role?.name || '', required: true, size: 'small', fullWidth: true }),
+            h(FormControl, { size: 'small', fullWidth: true },
+              h(InputLabel, null, 'Base access'),
+              h(Select, { name: 'base_role', defaultValue: editRoleModal.role?.base_role || 'staff', label: 'Base access' },
+                h(MenuItem, { value: 'staff' }, 'Staff'),
+                h(MenuItem, { value: 'manager' }, 'Manager')
+              )
+            ),
+            h(Box, null,
+              h(Typography, { variant: 'caption', fontWeight: 700, display: 'block', mb: 0.5 }, 'Permissions'),
+              permissions.map(p =>
+                h(FormControlLabel, {
+                  key: p,
+                  control: h(Checkbox, { name: 'edit_permissions', value: p, defaultChecked: editRoleModal.role?.permissions?.includes(p) }),
+                  label: p
+                })
+              )
+            )
+          )
+        ),
+        h(DialogActions, null,
+          h(Button, { onClick: () => setEditRoleModal({ open: false, role: null }) }, 'Cancel'),
+          h(Button, { type: 'submit', variant: 'contained', color: 'primary' }, 'Save role')
         )
       )
     )
@@ -2914,6 +2987,16 @@ function DomainsView({ restaurant, request, notify, bootstrapSession }) {
     }
   };
 
+  const handleVerifyDomain = async (domainId) => {
+    try {
+      const res = await request(`/api/v1/owner/domains/${domainId}/verify`, { method: 'POST', body: {} });
+      notify(res.message || 'DNS verification check complete.', 'success');
+      bootstrapSession();
+    } catch (err) {
+      notify(err.message, 'error');
+    }
+  };
+
   return h(Box, null,
     h(Box, { sx: { mb: 3 } },
       h(Typography, { variant: 'h4' }, 'Domains'),
@@ -2938,6 +3021,7 @@ function DomainsView({ restaurant, request, notify, bootstrapSession }) {
                       size: 'small',
                       color: dom.verified_at ? 'success' : 'warning'
                     }),
+                    !dom.verified_at && h(Button, { size: 'small', variant: 'contained', color: 'primary', onClick: () => handleVerifyDomain(dom.id) }, 'Verify DNS'),
                     dom.is_primary
                       ? h(Chip, { label: 'Primary', size: 'small' })
                       : h(Button, { size: 'small', color: 'error', variant: 'outlined', onClick: () => handleDeleteDomain(dom.id) }, 'Remove')
@@ -3083,6 +3167,10 @@ function BuildsView({ builds, request, notify, refreshView }) {
                         b.failure_message && h(Typography, { variant: 'caption', color: 'error.main' }, b.failure_message)
                       ),
                       h(Stack, { direction: 'row', spacing: 1 },
+                        b.status === 'succeeded' && b.artifacts?.length > 0 && b.artifacts.map(art =>
+                          h(Button, { key: art.id, size: 'small', variant: 'contained', color: 'success', href: `/api/v1/owner/app-builds/${b.public_id || b.id}/artifacts/${art.id}`, target: '_blank' }, `Download ${art.kind || 'build'}`)
+                        ),
+                        b.status === 'succeeded' && (!b.artifacts || b.artifacts.length === 0) && h(Chip, { label: 'Completed', size: 'small', color: 'success' }),
                         ['failed', 'cancelled'].includes(b.status) && h(Button, { size: 'small', variant: 'outlined', onClick: () => handleBuildAction(b.id, 'retry') }, 'Retry'),
                         ['queued', 'preparing', 'configuration_ready'].includes(b.status) && h(Button, { size: 'small', color: 'error', variant: 'outlined', onClick: () => handleBuildAction(b.id, 'cancel') }, 'Cancel')
                       )
@@ -3114,6 +3202,382 @@ function BuildsView({ builds, request, notify, refreshView }) {
             )
           )
         )
+      )
+    )
+  );
+}
+
+// ----------------------------------------------------
+// CMS PAGES & MEDIA GALLERY COMPONENTS (OWNER)
+// ----------------------------------------------------
+
+const cmsSectionTypes = [
+  { type: 'hero', label: 'Hero Banner' },
+  { type: 'featured_dishes', label: 'Featured Dishes' },
+  { type: 'categories', label: 'Menu Categories' },
+  { type: 'promotions', label: 'Special Promotions' },
+  { type: 'about', label: 'About Story' },
+  { type: 'locations', label: 'Branch Locations' },
+  { type: 'reservation_cta', label: 'Reservation CTA' },
+  { type: 'reviews', label: 'Customer Reviews' },
+  { type: 'gallery', label: 'Photo Gallery' },
+  { type: 'contact', label: 'Contact Info' },
+  { type: 'newsletter', label: 'Newsletter Subscription' },
+  { type: 'custom_text', label: 'Custom Text / Block' }
+];
+
+function PagesView({ pages, request, notify, refreshView }) {
+  const pageList = Array.isArray(pages) ? pages : (Array.isArray(pages?.data) ? pages.data : []);
+  const [createModal, setCreateModal] = useState(false);
+  const [editModal, setEditModal] = useState({ open: false, page: null });
+  const [sectionsModal, setSectionsModal] = useState({ open: false, page: null, sections: [] });
+
+  const handleCreatePage = async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const body = Object.fromEntries(new FormData(form));
+    body.is_home = form.is_home ? form.is_home.checked : false;
+    try {
+      await request('/api/v1/owner/pages', { method: 'POST', body });
+      notify('Page created.', 'success');
+      setCreateModal(false);
+      refreshView();
+    } catch (err) {
+      notify(err.message, 'error');
+    }
+  };
+
+  const handleUpdatePage = async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const body = Object.fromEntries(new FormData(form));
+    body.is_home = form.edit_is_home ? form.edit_is_home.checked : false;
+    delete body.edit_is_home;
+    try {
+      await request(`/api/v1/owner/pages/${editModal.page.id}`, { method: 'PATCH', body });
+      notify('Page updated.', 'success');
+      setEditModal({ open: false, page: null });
+      refreshView();
+    } catch (err) {
+      notify(err.message, 'error');
+    }
+  };
+
+  const handleDeletePage = async (page) => {
+    if (page.is_home) {
+      notify('Cannot delete the home page. Designate another page as home first.', 'error');
+      return;
+    }
+    if (!window.confirm(`Delete page "${page.title}"?`)) return;
+    try {
+      await request(`/api/v1/owner/pages/${page.id}`, { method: 'DELETE' });
+      notify('Page deleted.', 'success');
+      refreshView();
+    } catch (err) {
+      notify(err.message, 'error');
+    }
+  };
+
+  const openSectionsModal = (page) => {
+    const existing = page.sections || [];
+    setSectionsModal({
+      open: true,
+      page,
+      sections: existing.map((s, idx) => ({
+        id: s.id || `sec_${idx + 1}`,
+        type: s.type,
+        position: s.position ?? (idx + 1) * 10,
+        visible: s.visible !== false,
+        content: s.content || {}
+      }))
+    });
+  };
+
+  const handleAddSection = (type) => {
+    setSectionsModal(prev => ({
+      ...prev,
+      sections: [
+        ...prev.sections,
+        {
+          id: `sec_${Date.now()}_${prev.sections.length + 1}`,
+          type,
+          position: (prev.sections.length + 1) * 10,
+          visible: true,
+          content: {}
+        }
+      ]
+    }));
+  };
+
+  const handleRemoveSection = (idx) => {
+    setSectionsModal(prev => ({
+      ...prev,
+      sections: prev.sections.filter((_, i) => i !== idx)
+    }));
+  };
+
+  const handleUpdateSectionField = (idx, field, value) => {
+    setSectionsModal(prev => {
+      const next = [...prev.sections];
+      next[idx] = { ...next[idx], [field]: value };
+      return { ...prev, sections: next };
+    });
+  };
+
+  const handleSaveSections = async () => {
+    try {
+      const payload = {
+        sections: sectionsModal.sections.map((s, idx) => ({
+          id: s.id || `sec_${idx + 1}`,
+          type: s.type,
+          position: Number(s.position ?? (idx + 1) * 10),
+          visible: Boolean(s.visible),
+          content: s.content || {}
+        }))
+      };
+      await request(`/api/v1/owner/pages/${sectionsModal.page.id}/sections`, { method: 'PUT', body: payload });
+      notify('Page sections saved.', 'success');
+      setSectionsModal({ open: false, page: null, sections: [] });
+      refreshView();
+    } catch (err) {
+      notify(err.message, 'error');
+    }
+  };
+
+  return h(Box, null,
+    h(Box, { sx: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 } },
+      h(Box, null,
+        h(Typography, { variant: 'h4' }, 'Storefront pages'),
+        h(Typography, { variant: 'subtitle1' }, 'Manage custom CMS pages and modular content layouts.')
+      ),
+      h(Button, { variant: 'contained', color: 'primary', onClick: () => setCreateModal(true) }, '+ New page')
+    ),
+
+    h(Grid, { container: true, spacing: 3 },
+      h(Grid, { item: true, xs: 12 },
+        h(Card, null,
+          h(CardHeader, { title: 'All pages', subheader: `${pageList.length} pages configured` }),
+          h(CardContent, null,
+            pageList.length === 0
+              ? h(Typography, { color: 'text.secondary', textAlign: 'center', py: 4 }, 'No custom pages created yet.')
+              : h(Stack, { spacing: 2 },
+                  pageList.map(p =>
+                    h(Paper, { key: p.id, variant: 'outlined', sx: { p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 } },
+                      h(Box, null,
+                        h(Stack, { direction: 'row', spacing: 1, alignItems: 'center' },
+                          h(Typography, { variant: 'subtitle1', fontWeight: 700 }, p.title),
+                          p.is_home && h(Chip, { label: 'Home Page', size: 'small', color: 'primary' })
+                        ),
+                        h(Typography, { variant: 'body2', color: 'text.secondary' }, `Slug: /pages/${p.slug} • ${p.sections?.length || 0} layout sections`)
+                      ),
+                      h(Stack, { direction: 'row', spacing: 1 },
+                        h(Button, { size: 'small', variant: 'contained', color: 'secondary', onClick: () => openSectionsModal(p) }, 'Manage sections'),
+                        h(Button, { size: 'small', variant: 'outlined', onClick: () => setEditModal({ open: true, page: p }) }, 'Edit'),
+                        !p.is_home && h(Button, { size: 'small', color: 'error', variant: 'outlined', onClick: () => handleDeletePage(p) }, 'Delete')
+                      )
+                    )
+                  )
+                )
+          )
+        )
+      )
+    ),
+
+    // Create Page Modal
+    createModal && h(Dialog, { open: true, onClose: () => setCreateModal(false), maxWidth: 'xs', fullWidth: true },
+      h('form', { onSubmit: handleCreatePage },
+        h(DialogTitle, null, 'Create new page'),
+        h(DialogContent, null,
+          h(Stack, { spacing: 2, mt: 1 },
+            h(TextField, { label: 'Page Title', name: 'title', required: true, size: 'small', fullWidth: true }),
+            h(TextField, { label: 'URL Slug', name: 'slug', placeholder: 'about-us', required: true, size: 'small', fullWidth: true, helperText: 'Accessible at /pages/{slug}' }),
+            h(FormControlLabel, { control: h(Checkbox, { name: 'is_home', defaultChecked: false }), label: 'Set as Home Page' })
+          )
+        ),
+        h(DialogActions, null,
+          h(Button, { onClick: () => setCreateModal(false) }, 'Cancel'),
+          h(Button, { type: 'submit', variant: 'contained', color: 'primary' }, 'Create page')
+        )
+      )
+    ),
+
+    // Edit Page Modal
+    editModal.open && h(Dialog, { open: true, onClose: () => setEditModal({ open: false, page: null }), maxWidth: 'xs', fullWidth: true },
+      h('form', { onSubmit: handleUpdatePage },
+        h(DialogTitle, null, 'Edit page settings'),
+        h(DialogContent, null,
+          h(Stack, { spacing: 2, mt: 1 },
+            h(TextField, { label: 'Page Title', name: 'title', defaultValue: editModal.page?.title || '', required: true, size: 'small', fullWidth: true }),
+            h(TextField, { label: 'URL Slug', name: 'slug', defaultValue: editModal.page?.slug || '', required: true, size: 'small', fullWidth: true }),
+            h(FormControlLabel, { control: h(Checkbox, { name: 'edit_is_home', defaultChecked: Boolean(editModal.page?.is_home) }), label: 'Set as Home Page' })
+          )
+        ),
+        h(DialogActions, null,
+          h(Button, { onClick: () => setEditModal({ open: false, page: null }) }, 'Cancel'),
+          h(Button, { type: 'submit', variant: 'contained', color: 'primary' }, 'Save changes')
+        )
+      )
+    ),
+
+    // Manage Sections Modal
+    sectionsModal.open && h(Dialog, { open: true, onClose: () => setSectionsModal({ open: false, page: null, sections: [] }), maxWidth: 'md', fullWidth: true },
+      h(DialogTitle, null, `Manage sections: ${sectionsModal.page?.title}`),
+      h(DialogContent, null,
+        h(Box, { sx: { mb: 2 } },
+          h(Typography, { variant: 'body2', color: 'text.secondary', mb: 1.5 }, 'Add modular layout blocks and customize display order.'),
+          h(FormControl, { size: 'small', sx: { minWidth: 200 } },
+            h(InputLabel, null, 'Add section block'),
+            h(Select, {
+              label: 'Add section block',
+              value: '',
+              onChange: (e) => {
+                if (e.target.value) handleAddSection(e.target.value);
+              }
+            },
+              cmsSectionTypes.map(st => h(MenuItem, { key: st.type, value: st.type }, st.label))
+            )
+          )
+        ),
+        h(Divider, { sx: { my: 2 } }),
+        sectionsModal.sections.length === 0
+          ? h(Typography, { color: 'text.secondary', textAlign: 'center', py: 3 }, 'No sections added yet. Select a block type above.')
+          : h(Stack, { spacing: 2 },
+              sectionsModal.sections.map((sec, idx) =>
+                h(Paper, { key: sec.id || idx, variant: 'outlined', sx: { p: 2, bgcolor: '#fffaf6' } },
+                  h(Grid, { container: true, spacing: 2, alignItems: 'center' },
+                    h(Grid, { item: true, xs: 12, sm: 4 },
+                      h(Typography, { variant: 'subtitle2', fontWeight: 700 }, cmsSectionTypes.find(t => t.type === sec.type)?.label || sec.type),
+                      h(Typography, { variant: 'caption', color: 'text.secondary' }, `ID: ${sec.id}`)
+                    ),
+                    h(Grid, { item: true, xs: 6, sm: 3 },
+                      h(TextField, {
+                        label: 'Order',
+                        type: 'number',
+                        value: sec.position,
+                        onChange: (e) => handleUpdateSectionField(idx, 'position', Number(e.target.value)),
+                        size: 'small',
+                        fullWidth: true
+                      })
+                    ),
+                    h(Grid, { item: true, xs: 6, sm: 3 },
+                      h(FormControlLabel, {
+                        control: h(Switch, {
+                          checked: Boolean(sec.visible),
+                          onChange: (e) => handleUpdateSectionField(idx, 'visible', e.target.checked),
+                          color: 'primary'
+                        }),
+                        label: sec.visible ? 'Visible' : 'Hidden'
+                      })
+                    ),
+                    h(Grid, { item: true, xs: 12, sm: 2, sx: { textAlign: 'right' } },
+                      h(Button, { size: 'small', color: 'error', onClick: () => handleRemoveSection(idx) }, 'Remove')
+                    )
+                  )
+                )
+              )
+            )
+      ),
+      h(DialogActions, { sx: { p: 2.5 } },
+        h(Button, { onClick: () => setSectionsModal({ open: false, page: null, sections: [] }) }, 'Cancel'),
+        h(Button, { variant: 'contained', color: 'primary', onClick: handleSaveSections }, 'Save layout sections')
+      )
+    )
+  );
+}
+
+function MediaGalleryView({ assets, request, notify, refreshView }) {
+  const assetList = Array.isArray(assets) ? assets : (Array.isArray(assets?.data) ? assets.data : []);
+  const [uploading, setUploading] = useState(false);
+
+  const handleUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const form = new FormData();
+    form.append('image', file);
+    setUploading(true);
+    try {
+      await request('/api/v1/owner/media', { method: 'POST', body: form, form: true });
+      notify('Image uploaded successfully.', 'success');
+      refreshView();
+    } catch (err) {
+      notify(err.message, 'error');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleDelete = async (publicId) => {
+    if (!window.confirm('Permanently delete this image?')) return;
+    try {
+      await request(`/api/v1/owner/media/${publicId}`, { method: 'DELETE' });
+      notify('Media asset deleted.', 'success');
+      refreshView();
+    } catch (err) {
+      notify(err.message, 'error');
+    }
+  };
+
+  const handleCopyUrl = (url) => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(url);
+      notify('Image URL copied to clipboard.', 'success');
+    } else {
+      window.prompt('Copy image URL:', url);
+    }
+  };
+
+  return h(Box, null,
+    h(Box, { sx: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 } },
+      h(Box, null,
+        h(Typography, { variant: 'h4' }, 'Media gallery'),
+        h(Typography, { variant: 'subtitle1' }, 'Store and manage images for storefront logos, hero banners, and menus.')
+      ),
+      h(Button, { variant: 'contained', component: 'label', disabled: uploading },
+        uploading ? 'Uploading...' : 'Upload new image',
+        h('input', { type: 'file', hidden: true, accept: 'image/jpeg,image/png,image/webp', onChange: handleUpload })
+      )
+    ),
+
+    h(Card, null,
+      h(CardHeader, { title: 'Media assets', subheader: `${assetList.length} files stored` }),
+      h(CardContent, null,
+        assetList.length === 0
+          ? h(Box, { sx: { textAlign: 'center', py: 6 } },
+              h(Icon, { name: 'photo_library', sx: { fontSize: 48, color: '#c5b8b0', mb: 1 } }),
+              h(Typography, { color: 'text.secondary' }, 'No media files uploaded yet. Upload your first branding asset above.')
+            )
+          : h(Grid, { container: true, spacing: 2.5 },
+              assetList.map(ast =>
+                h(Grid, { item: true, xs: 12, sm: 6, md: 4, lg: 3, key: ast.id },
+                  h(Paper, { variant: 'outlined', sx: { overflow: 'hidden', borderRadius: 2, display: 'flex', flexDirection: 'column', height: '100%' } },
+                    h(Box, {
+                      sx: {
+                        height: 160,
+                        bgcolor: '#f5eee8',
+                        backgroundImage: `url(${ast.url})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center'
+                      }
+                    }),
+                    h(Box, { sx: { p: 1.5, flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' } },
+                      h(Box, null,
+                        h(Typography, { variant: 'caption', color: 'text.secondary', display: 'block' },
+                          `${ast.mime_type || 'image'} • ${(Number(ast.size_bytes || 0) / 1024).toFixed(1)} KB`
+                        ),
+                        h(Typography, { variant: 'caption', color: 'text.secondary', display: 'block' },
+                          `Uploaded ${date(ast.created_at)}`
+                        )
+                      ),
+                      h(Stack, { direction: 'row', spacing: 1, mt: 1.5 },
+                        h(Button, { size: 'small', variant: 'outlined', fullWidth: true, onClick: () => handleCopyUrl(ast.url) }, 'Copy URL'),
+                        h(Button, { size: 'small', color: 'error', onClick: () => handleDelete(ast.id) }, 'Delete')
+                      )
+                    )
+                  )
+                )
+              )
+            )
       )
     )
   );
@@ -3407,13 +3871,31 @@ function PlatformRestaurantDetailView({ detail, selectedRestaurant, setCurrentVi
     }
   };
 
+  const handleEndSupportSession = async (sessionId) => {
+    if (!window.confirm('End this active support session?')) return;
+    try {
+      await request(`/api/v1/platform/support-sessions/${sessionId}`, { method: 'DELETE' });
+      notify('Support session ended.', 'success');
+      refreshView();
+    } catch (err) {
+      notify(err.message, 'error');
+    }
+  };
+
   return h(Box, null,
     h(Box, { sx: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 } },
       h(Stack, { direction: 'row', spacing: 1.5, alignItems: 'center' },
         h(Button, { variant: 'outlined', onClick: () => setCurrentView('restaurants') }, '← All restaurants'),
         h(Typography, { variant: 'h5', fontWeight: 700 }, r.name)
       ),
-      h(Button, { variant: 'contained', color: 'primary', onClick: () => setSupportModal(true) }, 'Open audited support session')
+      h(Stack, { direction: 'row', spacing: 1.5 },
+        r.active_support_session && h(Button, {
+          variant: 'outlined',
+          color: 'error',
+          onClick: () => handleEndSupportSession(r.active_support_session.public_id || r.active_support_session.id)
+        }, 'End active session'),
+        h(Button, { variant: 'contained', color: 'primary', onClick: () => setSupportModal(true) }, 'Open audited support session')
+      )
     ),
 
     // Usage Metrics Grid
@@ -3932,6 +4414,7 @@ function PlatformAuditView({ data }) {
 
 function PlatformPlansView({ plans, request, notify, refreshView }) {
   const planList = Array.isArray(plans) ? plans : (Array.isArray(plans?.data) ? plans.data : []);
+  const [editPlanModal, setEditPlanModal] = useState({ open: false, plan: null });
 
   const handleCreatePlan = async (e) => {
     e.preventDefault();
@@ -3944,6 +4427,24 @@ function PlatformPlansView({ plans, request, notify, refreshView }) {
       await request('/api/v1/platform/subscription-plans', { method: 'POST', body: dataObj });
       notify('Plan created.', 'success');
       form.reset();
+      refreshView();
+    } catch (err) {
+      notify(err.message, 'error');
+    }
+  };
+
+  const handleUpdatePlan = async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const dataObj = Object.fromEntries(new FormData(form));
+    dataObj.price_minor = Number(dataObj.price_minor);
+    dataObj.features = dataObj.features.split(',').map(f => f.trim()).filter(Boolean);
+    dataObj.active = form.querySelector('[name="edit_active"]').checked;
+    delete dataObj.edit_active;
+    try {
+      await request(`/api/v1/platform/subscription-plans/${editPlanModal.plan.id}`, { method: 'PATCH', body: dataObj });
+      notify('Plan updated.', 'success');
+      setEditPlanModal({ open: false, plan: null });
       refreshView();
     } catch (err) {
       notify(err.message, 'error');
@@ -3967,7 +4468,10 @@ function PlatformPlansView({ plans, request, notify, refreshView }) {
                     h(Typography, { variant: 'subtitle1', fontWeight: 700 }, p.name),
                     h(Typography, { variant: 'body2', color: 'text.secondary' }, `${p.code} • ${money(p.price_minor / 100, p.currency_code)}/month • ${p.features?.length || 0} features`)
                   ),
-                  h(Chip, { label: p.active ? 'Active' : 'Hidden', size: 'small', color: p.active ? 'success' : 'default' })
+                  h(Stack, { direction: 'row', spacing: 1, alignItems: 'center' },
+                    h(Chip, { label: p.active ? 'Active' : 'Hidden', size: 'small', color: p.active ? 'success' : 'default' }),
+                    h(Button, { size: 'small', variant: 'outlined', onClick: () => setEditPlanModal({ open: true, plan: p }) }, 'Edit')
+                  )
                 )
               )
             )
@@ -3990,6 +4494,27 @@ function PlatformPlansView({ plans, request, notify, refreshView }) {
               )
             )
           )
+        )
+      )
+    ),
+
+    // Edit Plan Dialog
+    editPlanModal.open && h(Dialog, { open: true, onClose: () => setEditPlanModal({ open: false, plan: null }), maxWidth: 'sm', fullWidth: true },
+      h('form', { onSubmit: handleUpdatePlan },
+        h(DialogTitle, null, 'Edit subscription plan'),
+        h(DialogContent, null,
+          h(Stack, { spacing: 2, mt: 1 },
+            h(TextField, { label: 'Name', name: 'name', defaultValue: editPlanModal.plan?.name || '', required: true, size: 'small', fullWidth: true }),
+            h(TextField, { label: 'Code', name: 'code', defaultValue: editPlanModal.plan?.code || '', required: true, size: 'small', fullWidth: true }),
+            h(TextField, { label: 'Price (minor units)', name: 'price_minor', type: 'number', defaultValue: editPlanModal.plan?.price_minor ?? 0, required: true, size: 'small', fullWidth: true }),
+            h(TextField, { label: 'Currency', name: 'currency_code', defaultValue: editPlanModal.plan?.currency_code || 'USD', required: true, size: 'small', fullWidth: true }),
+            h(TextField, { label: 'Features (comma separated)', name: 'features', defaultValue: (editPlanModal.plan?.features || []).join(', '), multiline: true, rows: 3, size: 'small', fullWidth: true }),
+            h(FormControlLabel, { control: h(Checkbox, { name: 'edit_active', defaultChecked: editPlanModal.plan?.active !== false }), label: 'Active plan' })
+          )
+        ),
+        h(DialogActions, null,
+          h(Button, { onClick: () => setEditPlanModal({ open: false, plan: null }) }, 'Cancel'),
+          h(Button, { type: 'submit', variant: 'contained', color: 'primary' }, 'Save changes')
         )
       )
     )
