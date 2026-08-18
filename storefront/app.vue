@@ -14,7 +14,7 @@ const rootStyle = computed(() => ({
 }))
 const requestUrl = useRequestURL()
 const canonical = computed(() => `${requestUrl.protocol}//${requestUrl.host}${route.path === '/' ? '/' : route.path.replace(/\/$/, '')}`)
-const description = computed(() => tenant.value?.brand.identity.tagline || 'Order fresh food or reserve a table.')
+const description = computed(() => tenant.value?.brand.identity.tagline || 'Order fresh food or make a reservation online.')
 const socialImage = computed(() => tenant.value?.brand.content.hero_image_url || tenant.value?.brand.identity.logo_url || undefined)
 
 useSeoMeta({
@@ -148,7 +148,7 @@ const mobileOpen = ref(false)
               <nav aria-label="Footer navigation">
                 <NuxtLink to="/">Home</NuxtLink>
                 <NuxtLink to="/menu">Our Menu</NuxtLink>
-                <NuxtLink to="/reservations">Table Reservations</NuxtLink>
+                <NuxtLink to="/reservations">Reservations</NuxtLink>
                 <NuxtLink to="/locations">Locations & Hours</NuxtLink>
                 <NuxtLink to="/account">My Account</NuxtLink>
               </nav>
@@ -169,7 +169,7 @@ const mobileOpen = ref(false)
             <div class="footer-links-inline">
               <NuxtLink to="/menu">Order Online</NuxtLink>
               <span>•</span>
-              <NuxtLink to="/reservations">Book Table</NuxtLink>
+              <NuxtLink to="/reservations">Reservations</NuxtLink>
             </div>
           </div>
         </div>

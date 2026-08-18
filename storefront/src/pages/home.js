@@ -22,7 +22,7 @@ export async function renderHomePage() {
       <section class="storefront-status" aria-label="Restaurant services">
         <div class="container storefront-status-inner">
           <span><i class="ri-checkbox-circle-fill"></i> Online ordering available</span>
-          <span><i class="ri-calendar-check-line"></i> Instant table requests</span>
+          <span><i class="ri-calendar-check-line"></i> Instant reservations</span>
           <span><i class="ri-shield-check-line"></i> Secure customer accounts</span>
         </div>
       </section>
@@ -36,7 +36,7 @@ export async function renderHomePage() {
 
             <div class="hero-actions">
               <a href="#/menu" class="btn btn-primary btn-lg">Explore the menu <i class="ri-arrow-right-line"></i></a>
-              <a href="#/reservations" class="btn btn-outline btn-lg">Book a table <i class="ri-calendar-check-line"></i></a>
+              <a href="#/reservations" class="btn btn-outline btn-lg">Make a reservation <i class="ri-calendar-check-line"></i></a>
             </div>
 
             <dl class="hero-metrics" aria-label="Restaurant availability">
@@ -48,7 +48,7 @@ export async function renderHomePage() {
 
           <div class="hero-visual">
             <div class="hero-image-frame">
-              <img src="${safeImageUrl(brand.content.hero_image_url, 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=86')}" alt="A table prepared at ${restaurantName}" class="hero-image" />
+              <img src="${safeImageUrl(brand.content.hero_image_url, 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=86')}" alt="${restaurantName}" class="hero-image" />
             </div>
             <div class="hero-order-card">
               <span class="hero-order-icon"><i class="ri-restaurant-2-line"></i></span>
@@ -74,7 +74,7 @@ export async function renderHomePage() {
             </a>
             <a href="#/reservations" class="service-feature-card">
               <span class="feature-icon"><i class="ri-calendar-check-line"></i></span>
-              <div><h3>Reserve your table</h3><p>Choose your branch, party size, date, and time in a few simple steps.</p></div>
+              <div><h3>Reservations</h3><p>Choose your branch, party size, date, and time in a few simple steps.</p></div>
               <i class="ri-arrow-right-up-line feature-arrow"></i>
             </a>
             <a href="#/account" class="service-feature-card">
@@ -133,7 +133,7 @@ export async function renderHomePage() {
           <div class="journey-copy">
             <span class="section-kicker">Made for every screen</span>
             <h2>Your order and reservations stay with you.</h2>
-            <p>Create an account once to keep your details, follow recent orders, and manage upcoming table reservations from mobile or desktop.</p>
+            <p>Create an account once to keep your details, follow recent orders, and manage upcoming reservations from mobile or desktop.</p>
             <ul class="journey-list">
               <li><i class="ri-check-line"></i> Tenant-secured customer account</li>
               <li><i class="ri-check-line"></i> Server-validated menu prices</li>
@@ -146,7 +146,7 @@ export async function renderHomePage() {
               <div class="phone-top"><span></span></div>
               <div class="phone-brand"><i class="ri-restaurant-2-fill"></i><strong>${restaurantName}</strong></div>
               <div class="phone-card"><span class="phone-card-icon"><i class="ri-shopping-bag-3-line"></i></span><div><small>Recent order</small><strong>Fresh from the kitchen</strong></div><span class="phone-pill">Received</span></div>
-              <div class="phone-card"><span class="phone-card-icon"><i class="ri-calendar-check-line"></i></span><div><small>Reservation</small><strong>Your table request</strong></div><span class="phone-pill">Saved</span></div>
+              <div class="phone-card"><span class="phone-card-icon"><i class="ri-calendar-check-line"></i></span><div><small>Reservation</small><strong>Your reservation request</strong></div><span class="phone-pill">Saved</span></div>
             </div>
           </div>
         </div>
@@ -154,8 +154,8 @@ export async function renderHomePage() {
 
       ${visible('reservation_cta') ? `<section class="section service-section">
         <div class="container service-banner">
-          <div><span class="section-kicker">Planning a visit?</span><h2>Your next table is only a few clicks away.</h2><p>Select a location and time, then let our team prepare for your arrival.</p></div>
-          <a href="#/reservations" class="btn btn-primary">Reserve a table <i class="ri-calendar-check-line"></i></a>
+          <div><span class="section-kicker">Planning a visit?</span><h2>Your next dining experience is only a few clicks away.</h2><p>Select a location and time, then let our team prepare for your arrival.</p></div>
+          <a href="#/reservations" class="btn btn-primary">Make a reservation <i class="ri-calendar-check-line"></i></a>
         </div>
       </section>` : ''}
     </main>

@@ -13,8 +13,8 @@ export async function renderReservationPage() {
       <div class="container" style="max-width:800px;">
         <div style="text-align:center;margin-bottom:2.5rem;">
           <span class="badge badge-gold" style="margin-bottom:0.75rem;">Exclusive Dining</span>
-          <h1 style="font-size:2.4rem;margin-bottom:0.5rem;">Table Reservation</h1>
-          <p style="color:var(--text-secondary);">Reserve your culinary experience at one of our fine dining rooms.</p>
+          <h1 style="font-size:2.4rem;margin-bottom:0.5rem;">Online Reservations</h1>
+          <p style="color:var(--text-secondary);">Reserve your culinary experience at one of our dining rooms.</p>
         </div>
 
         <form id="reservation-form" class="glass-card reservation-card" style="padding:2.5rem;" data-reservation-status-id="${storefrontConfig.default_reservation_status_id}">
@@ -39,10 +39,10 @@ export async function renderReservationPage() {
             <div class="form-group">
               <label class="form-label">Number of Guests *</label>
               <select id="res-guests" class="form-control" required>
-                <option value="2">2 Guests (Table for Two)</option>
-                <option value="4" selected>4 Guests (Family Table)</option>
-                <option value="6">6 Guests (Party)</option>
-                <option value="8">8+ Guests (VIP Booth)</option>
+                <option value="2">2 Guests</option>
+                <option value="4" selected>4 Guests</option>
+                <option value="6">6 Guests</option>
+                <option value="8">8+ Guests</option>
               </select>
             </div>
           </div>
@@ -73,20 +73,20 @@ export async function renderReservationPage() {
           </div>
 
           <div class="form-group">
-            <label class="form-label">Preferred Table <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+            <label class="form-label">Seating Preference <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
             <select id="res-table" class="form-control">
-              <option value="">No preference — assign the best available table</option>
+              <option value="">No preference — assign the best available seating</option>
             </select>
-            <p style="font-size:0.8rem;color:var(--text-muted);margin-top:0.4rem;">Only tables that fit your party will be available to select.</p>
+            <p style="font-size:0.8rem;color:var(--text-muted);margin-top:0.4rem;">Only options that fit your party will be available to select.</p>
           </div>
 
           <div class="form-group">
-            <label class="form-label">Special Seating Requests</label>
-            <textarea id="res-notes" class="form-control" rows="3" placeholder="Window table, quiet area, birthday celebration..."></textarea>
+            <label class="form-label">Special Requests</label>
+            <textarea id="res-notes" class="form-control" rows="3" placeholder="Window seating, quiet area, birthday celebration..."></textarea>
           </div>
 
           <button type="submit" id="btn-submit-res" class="btn btn-primary btn-lg" style="width:100%;margin-top:1rem;">
-            Confirm Table Reservation <i class="ri-calendar-check-line"></i>
+            Confirm Reservation <i class="ri-calendar-check-line"></i>
           </button>
         </form>
       </div>

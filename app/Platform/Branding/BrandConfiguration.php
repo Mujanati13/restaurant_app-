@@ -10,21 +10,21 @@ final class BrandConfiguration
     public static function defaults(string $name): array
     {
         return [
-            'identity' => ['name' => $name, 'tagline' => 'Made fresh for your table', 'logo_url' => null],
+            'identity' => ['name' => $name, 'tagline' => 'Made fresh for you', 'logo_url' => null],
             'theme' => [
                 'primary' => '#c95028', 'secondary' => '#29231f', 'accent' => '#f6a623',
                 'background' => '#fffaf6', 'surface' => '#ffffff', 'text' => '#29231f', 'radius' => 16,
             ],
             'content' => [
                 'hero_title' => 'Restaurant-quality food, on your schedule.',
-                'hero_subtitle' => 'Order freshly prepared favourites or reserve a table.',
+                'hero_subtitle' => 'Order freshly prepared favourites or reserve your visit.',
                 'hero_image_url' => null,
                 'footer_text' => "{$name}. All rights reserved.",
             ],
             'navigation' => [
                 ['label' => 'Home', 'href' => '#/'],
                 ['label' => 'Menu', 'href' => '#/menu'],
-                ['label' => 'Reserve Table', 'href' => '#/reservations'],
+                ['label' => 'Reservations', 'href' => '#/reservations'],
                 ['label' => 'Locations', 'href' => '#/locations'],
             ],
             'sections' => [

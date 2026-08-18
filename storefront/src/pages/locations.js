@@ -42,7 +42,7 @@ export async function renderLocationsPage() {
 
               <div style="display:flex;gap:0.75rem;">
                 <a href="#/menu" class="btn btn-primary btn-sm" style="flex:1;">Order Online</a>
-                <a href="#/reservations" class="btn btn-outline btn-sm">Reserve Table</a>
+                <a href="#/reservations" class="btn btn-outline btn-sm">Reservations</a>
               </div>
             </div>
           `).join('')}

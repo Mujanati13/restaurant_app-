@@ -9,7 +9,7 @@ export function renderHeader() {
   const userHref = isLoggedIn ? '#/account' : '#/login';
   const navigation = tenant.brand.navigation?.length ? tenant.brand.navigation : [
     {label: 'Home', href: '#/'}, {label: 'Menu', href: '#/menu'},
-    {label: 'Reserve Table', href: '#/reservations'}, {label: 'Locations', href: '#/locations'},
+    {label: 'Reservations', href: '#/reservations'}, {label: 'Locations', href: '#/locations'},
   ];
 
   return `

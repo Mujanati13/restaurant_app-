@@ -45,7 +45,7 @@ const currencyCode = computed(() => tenant.data.value?.data?.currency?.code || '
           <div class="hero-kicker-wrap">
             <span class="hero-badge">
               <i class="ri-sparkling-fill" />
-              {{ brand.identity?.tagline || 'Made fresh for your table' }}
+              {{ brand.identity?.tagline || 'Made fresh for you' }}
             </span>
           </div>
 
@@ -54,7 +54,7 @@ const currencyCode = computed(() => tenant.data.value?.data?.currency?.code || '
           </h1>
 
           <p class="hero-subtitle">
-            {{ brand.content?.hero_subtitle || 'Order freshly prepared favourites or reserve a table with ease.' }}
+            {{ brand.content?.hero_subtitle || 'Order freshly prepared favourites or reserve your visit with ease.' }}
           </p>
 
           <div class="hero-actions">
@@ -64,7 +64,7 @@ const currencyCode = computed(() => tenant.data.value?.data?.currency?.code || '
             </NuxtLink>
             <NuxtLink class="btn outline hero-btn-sub" to="/reservations">
               <i class="ri-calendar-line" />
-              <span>Reserve a table</span>
+              <span>Make a reservation</span>
             </NuxtLink>
           </div>
 
@@ -182,8 +182,8 @@ const currencyCode = computed(() => tenant.data.value?.data?.currency?.code || '
               <i class="ri-calendar-check-line" />
             </div>
             <div class="pillar-text">
-              <h3>Instant Table Booking</h3>
-              <p>Plan intimate dinners or group gatherings with hassle-free live table confirmation.</p>
+              <h3>Instant Booking</h3>
+              <p>Plan intimate dinners or group gatherings with hassle-free live confirmation.</p>
             </div>
           </div>
         </div>
@@ -278,7 +278,7 @@ const currencyCode = computed(() => tenant.data.value?.data?.currency?.code || '
         <div class="centered-headline">
           <span class="section-kicker">Effortless Dining</span>
           <h2>How it works</h2>
-          <p>From table selection to first bite, dining with us is smooth and memorable.</p>
+          <p>From menu selection to first bite, dining with us is smooth and memorable.</p>
         </div>
 
         <div class="journey-steps-grid">
@@ -297,7 +297,7 @@ const currencyCode = computed(() => tenant.data.value?.data?.currency?.code || '
               <i class="ri-shopping-cart-2-line" />
             </div>
             <h3>Order or Reserve</h3>
-            <p>Customize your food order for fast delivery or reserve your table in just a few simple taps.</p>
+            <p>Customize your food order for fast delivery or reserve your visit in just a few simple taps.</p>
           </div>
 
           <div class="step-card">
@@ -322,7 +322,7 @@ const currencyCode = computed(() => tenant.data.value?.data?.currency?.code || '
               <i class="ri-vip-crown-2-line" />
               Make it a moment
             </span>
-            <h2>Your table is waiting.</h2>
+            <h2>We are ready to welcome you.</h2>
             <p>
               Whether you are planning a relaxed dinner, family gathering, or romantic date night,
               let our kitchen take care of the rest.
@@ -336,7 +336,7 @@ const currencyCode = computed(() => tenant.data.value?.data?.currency?.code || '
 
             <div class="banner-actions">
               <NuxtLink class="btn primary banner-primary-btn" to="/reservations">
-                <span>Reserve a table now</span>
+                <span>Make a reservation now</span>
                 <i class="ri-arrow-right-line" />
               </NuxtLink>
               <NuxtLink class="btn outline banner-secondary-btn" to="/locations">
