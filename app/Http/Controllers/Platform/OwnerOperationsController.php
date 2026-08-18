@@ -96,7 +96,7 @@ class OwnerOperationsController extends Controller
             'search' => ['nullable', 'string', 'max:100'], 'location_id' => ['nullable', 'integer'], 'status_id' => ['nullable', 'integer'],
             'page' => ['nullable', 'integer', 'min:1'], 'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
-        $query = Order::query()->with(['status', 'menus', 'location'])->where('restaurant_id', $this->tenant->id())
+        $query = Order::query()->with(['status', 'menus.menu_options', 'location', 'status_history.status', 'address'])->where('restaurant_id', $this->tenant->id())
             ->when($data['location_id'] ?? null, fn($q, $id) => $q->where('location_id', $id))
             ->when($data['status_id'] ?? null, fn($q, $id) => $q->where('status_id', $id))
             ->when($data['search'] ?? null, fn($q, $search) => $q->where(fn($match) => $match
@@ -453,11 +453,49 @@ class OwnerOperationsController extends Controller
     private function orderData(Order $order): array
     {
         return [
-            'id' => (int)$order->getKey(), 'number' => '#'.(int)$order->getKey(), 'customer_name' => $order->customer_name,
-            'customer_phone' => $order->telephone, 'type' => $order->order_type_name, 'scheduled_for' => $order->order_datetime?->toIso8601String(),
-            'status_id' => (int)$order->status_id, 'status_name' => $order->status_name ?? $order->status?->status_name ?? 'New',
-            'total' => (float)$order->order_total, 'items_count' => (int)$order->total_items,
-            'location_name' => $order->location?->location_name, 'comment' => $order->comment,
+            'id' => (int)$order->getKey(),
+            'number' => '#'.(int)$order->getKey(),
+            'customer_name' => $order->customer_name ?: trim($order->first_name.' '.$order->last_name),
+            'customer_email' => $order->email,
+            'customer_phone' => $order->telephone,
+            'type' => $order->order_type_name ?? $order->order_type ?? 'Standard',
+            'scheduled_for' => $order->order_datetime?->toIso8601String() ?? ($order->order_date ? $order->order_date.' '.$order->order_time : null),
+            'status_id' => (int)$order->status_id,
+            'status_name' => $order->status_name ?? $order->status?->status_name ?? 'New',
+            'status_color' => $order->status_color ?? $order->status?->status_color ?? '#b84f2e',
+            'total' => (float)$order->order_total,
+            'items_count' => (int)$order->total_items,
+            'items' => $order->menus->map(fn($item) => [
+                'id' => (int)($item->menu_id ?? $item->getKey()),
+                'name' => $item->name ?? $item->menu_name ?? 'Menu item',
+                'quantity' => (int)($item->quantity ?? $item->qty ?? 1),
+                'price' => (float)($item->price ?? 0),
+                'subtotal' => (float)($item->subtotal ?? (($item->price ?? 0) * ($item->quantity ?? 1))),
+                'comment' => $item->comment ?? null,
+                'options' => method_exists($item, 'menu_options') || isset($item->menu_options) ? $item->menu_options?->map(fn($opt) => [
+                    'name' => $opt->order_option_name ?? $opt->option_name ?? 'Option',
+                    'quantity' => (int)($opt->quantity ?? 1),
+                    'price' => (float)($opt->order_option_price ?? 0),
+                ])->values() : [],
+            ])->values(),
+            'timeline' => $order->status_history?->sortBy('created_at')->map(fn($history) => [
+                'status_id' => (int)$history->status_id,
+                'status' => $history->status_name ?? $history->status?->status_name ?? 'Updated',
+                'color' => $history->status?->status_color ?? '#746a62',
+                'comment' => $history->comment,
+                'created_at' => $history->created_at?->toIso8601String(),
+            ])->values() ?? [],
+            'location_name' => $order->location?->location_name,
+            'payment_method' => $order->payment ?? 'cod',
+            'delivery_address' => $order->address ? trim(implode(', ', array_filter([
+                $order->address->address_1,
+                $order->address->address_2,
+                $order->address->city,
+                $order->address->state,
+                $order->address->postcode,
+            ]))) : null,
+            'comment' => $order->comment,
+            'created_at' => $order->created_at?->toIso8601String(),
         ];
     }
 

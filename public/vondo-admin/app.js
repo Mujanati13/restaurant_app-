@@ -945,7 +945,7 @@ function App() {
               setSelectedRestaurant,
               request,
               notify,
-              refreshView: () => loadView(currentView),
+              refreshView: (p = 1, f = {}) => loadView(currentView, p, f),
               bootstrapSession,
             })
       )
@@ -1210,6 +1210,104 @@ function ViewContent({
 }
 
 // ----------------------------------------------------
+// PRINTABLE RECEIPT & KITCHEN TICKET UTILITY
+// ----------------------------------------------------
+
+function printOrderReceipt(order, restaurant) {
+  if (!order) return;
+  const printWindow = window.open('', '_blank', 'width=450,height=700');
+  if (!printWindow) return;
+  const currency = restaurant?.currency_code || 'USD';
+  const items = order.items || [];
+  const itemsHtml = items.length ? items.map(item => `
+    <tr style="border-bottom: 1px dashed #e0e0e0;">
+      <td style="padding: 8px 0; vertical-align: top;">
+        <div style="font-weight: 700; font-size: 14px;">${item.quantity}x ${esc(item.name)}</div>
+        ${(item.options || []).map(o => `<div style="font-size: 12px; color: #555; padding-left: 10px;">+ ${o.quantity > 1 ? o.quantity + 'x ' : ''}${esc(o.name)}</div>`).join('')}
+        ${item.comment ? `<div style="font-size: 12px; font-style: italic; color: #888; padding-left: 10px;">"${esc(item.comment)}"</div>` : ''}
+      </td>
+      <td style="padding: 8px 0; text-align: right; vertical-align: top; font-weight: 700; font-size: 14px;">
+        ${money(item.subtotal || (item.price * item.quantity), currency)}
+      </td>
+    </tr>
+  `).join('') : `<tr><td colspan="2" style="padding: 10px 0; text-align: center; color: #888;">Order items summary</td></tr>`;
+
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Order Receipt ${order.number}</title>
+        <style>
+          * { box-sizing: border-box; }
+          body { font-family: 'Courier New', Courier, monospace; padding: 20px; font-size: 13px; color: #111; line-height: 1.4; max-width: 380px; margin: 0 auto; background: #fff; }
+          .header { text-align: center; border-bottom: 2px dashed #333; padding-bottom: 12px; margin-bottom: 12px; }
+          .header h1 { margin: 0 0 4px 0; font-size: 20px; text-transform: uppercase; }
+          .header .sub { font-size: 12px; color: #555; }
+          .badge { display: inline-block; padding: 3px 8px; margin-top: 6px; font-weight: 800; text-transform: uppercase; background: #000; color: #fff; border-radius: 3px; }
+          .meta { margin-bottom: 12px; font-size: 13px; border-bottom: 1px dashed #777; padding-bottom: 10px; }
+          .meta div { margin-bottom: 3px; }
+          .note-box { margin-top: 8px; padding: 6px; background: #f0f0f0; border-left: 3px solid #000; font-weight: 600; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+          .totals { border-top: 2px dashed #333; border-bottom: 2px dashed #333; padding: 10px 0; margin-bottom: 14px; }
+          .totals-row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px; }
+          .totals-row.grand { font-size: 17px; font-weight: 900; margin-top: 6px; padding-top: 6px; border-top: 1px dotted #888; }
+          .footer { text-align: center; font-size: 12px; color: #555; }
+          @media print { body { padding: 0; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>${esc(restaurant?.name || 'Vondo Kitchen')}</h1>
+          <div class="sub">${esc(order.location_name || 'Restaurant')}</div>
+          <div style="font-size: 18px; font-weight: 900; margin-top: 6px;">ORDER ${order.number}</div>
+          <div class="badge">${esc(order.type || 'Standard')}</div>
+        </div>
+        <div class="meta">
+          <div><strong>Date:</strong> ${date(order.created_at || order.scheduled_for)}</div>
+          <div><strong>Customer:</strong> ${esc(order.customer_name)}</div>
+          ${order.customer_phone ? `<div><strong>Phone:</strong> ${esc(order.customer_phone)}</div>` : ''}
+          ${order.customer_email ? `<div><strong>Email:</strong> ${esc(order.customer_email)}</div>` : ''}
+          ${order.delivery_address ? `<div><strong>Address:</strong> ${esc(order.delivery_address)}</div>` : ''}
+          ${order.comment ? `<div class="note-box"><strong>NOTE:</strong> ${esc(order.comment)}</div>` : ''}
+        </div>
+        <table>
+          <tbody>
+            ${itemsHtml}
+          </tbody>
+        </table>
+        <div class="totals">
+          <div class="totals-row">
+            <span>Items Count:</span>
+            <span>${order.items_count || items.length}</span>
+          </div>
+          <div class="totals-row">
+            <span>Payment Method:</span>
+            <span style="text-transform: uppercase;">${esc(order.payment_method || 'COD')}</span>
+          </div>
+          <div class="totals-row">
+            <span>Status:</span>
+            <span>${esc(order.status_name || 'New')}</span>
+          </div>
+          <div class="totals-row grand">
+            <span>TOTAL:</span>
+            <span>${money(order.total, currency)}</span>
+          </div>
+        </div>
+        <div class="footer">
+          <div>Thank you for choosing ${esc(restaurant?.name || 'us')}!</div>
+          <div style="margin-top: 4px; font-size: 10px;">Powered by Vondo Operations</div>
+        </div>
+        <script>
+          window.onload = function() { window.print(); };
+        </script>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+}
+
+// ----------------------------------------------------
 // VENDOR / STAFF DASHBOARD & WORKSPACE COMPONENTS
 // ----------------------------------------------------
 
@@ -1292,50 +1390,141 @@ function VendorDashboardView({ data, vendorBootstrap, vendorLocationId, setVendo
 
 function VendorOrdersView({ data, vendorBootstrap, vendorLocationId, request, notify, refreshView }) {
   const [statusId, setStatusId] = useState('');
+  const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [statusComment, setStatusComment] = useState('');
+  const [notifyCustomer, setNotifyCustomer] = useState(true);
 
   const orders = data?.data || [];
-  const meta = data?.meta || { total: orders.length };
+  const meta = data?.meta || { total: orders.length, limit: 30 };
   const statuses = vendorBootstrap?.order_statuses || [];
 
-  const handleUpdateStatus = async (orderId, newStatus) => {
+  // Live Auto-Refresh polling (every 15s)
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(() => {
+      refreshView(page + 1, { status_id: statusId, search });
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [autoRefresh, page, statusId, search, refreshView]);
+
+  const handleApplyFilter = () => {
+    setPage(0);
+    refreshView(1, { status_id: statusId, search });
+  };
+
+  const handleClearFilter = () => {
+    setStatusId('');
+    setSearch('');
+    setPage(0);
+    refreshView(1, {});
+  };
+
+  const handleUpdateStatus = async (orderId, newStatus, comment = statusComment, notifyCust = notifyCustomer) => {
     try {
-      await request(`/api/v1/vendor/orders/${orderId}/status`, {
+      const res = await request(`/api/v1/vendor/orders/${orderId}/status`, {
         method: 'PATCH',
-        body: { status_id: Number(newStatus), location_id: vendorLocationId, notify: true }
+        body: { status_id: Number(newStatus), location_id: vendorLocationId, comment: comment || undefined, notify: notifyCust }
       });
       notify('Order status updated.', 'success');
-      refreshView();
+      if (selectedOrder && selectedOrder.id === orderId && res.data) {
+        setSelectedOrder(res.data);
+      }
+      setStatusComment('');
+      refreshView(page + 1, { status_id: statusId, search });
     } catch (err) {
       notify(err.message, 'error');
     }
   };
 
+  // KPI calculations
+  const totalVolume = orders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+  const waitingCount = orders.filter(o => o.status_id === 1 || o.status_name?.toLowerCase().includes('received') || o.status_name?.toLowerCase().includes('pending')).length;
+  const preparingCount = orders.filter(o => o.status_name?.toLowerCase().includes('prep') || o.status_name?.toLowerCase().includes('cook')).length;
+
   return h(Box, null,
-    h(Box, { sx: { mb: 3 } },
-      h(Typography, { variant: 'h4' }, 'Live Orders'),
-      h(Typography, { variant: 'subtitle1' }, 'Kitchen & counter order flow with live status updates and items breakdown.')
+    // Header & Auto-Refresh Toggle
+    h(Box, { sx: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 } },
+      h(Box, null,
+        h(Typography, { variant: 'h4' }, 'Live Kitchen Orders'),
+        h(Typography, { variant: 'subtitle1' }, 'Live counter & kitchen order stream with instant status workflows.')
+      ),
+      h(Stack, { direction: 'row', spacing: 2, alignItems: 'center' },
+        h(Paper, { variant: 'outlined', sx: { px: 2, py: 0.5, display: 'flex', alignItems: 'center', gap: 1, bgcolor: autoRefresh ? '#f0f8f4' : 'transparent' } },
+          h(Box, {
+            sx: {
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              bgcolor: autoRefresh ? 'success.main' : 'text.disabled',
+              animation: autoRefresh ? 'pulse 2s infinite' : 'none'
+            }
+          }),
+          h(Typography, { variant: 'body2', fontWeight: 600, color: autoRefresh ? 'success.dark' : 'text.secondary' },
+            autoRefresh ? 'Live stream active (15s)' : 'Auto-refresh paused'
+          ),
+          h(Switch, {
+            size: 'small',
+            checked: autoRefresh,
+            onChange: (e) => setAutoRefresh(e.target.checked),
+            color: 'success'
+          })
+        ),
+        h(Button, { variant: 'outlined', onClick: () => refreshView(page + 1, { status_id: statusId, search }) }, 'Refresh now')
+      )
     ),
-    // Filter
+
+    // KPI Metrics Cards
+    h(Grid, { container: true, spacing: 2, sx: { mb: 3 } },
+      h(Grid, { item: true, xs: 12, sm: 6, md: 3 },
+        h(MetricCard, { label: 'Orders in view', value: orders.length, icon: 'receipt_long' })
+      ),
+      h(Grid, { item: true, xs: 12, sm: 6, md: 3 },
+        h(MetricCard, { label: 'New / Waiting', value: waitingCount, icon: 'schedule', color: 'warning.main' })
+      ),
+      h(Grid, { item: true, xs: 12, sm: 6, md: 3 },
+        h(MetricCard, { label: 'In Kitchen', value: preparingCount, icon: 'soup_kitchen', color: 'primary.main' })
+      ),
+      h(Grid, { item: true, xs: 12, sm: 6, md: 3 },
+        h(MetricCard, { label: 'Visible Volume', value: money(totalVolume), icon: 'payments', color: 'success.main' })
+      )
+    ),
+
+    // Filter Bar
     h(Card, { sx: { mb: 3 } },
       h(CardContent, { sx: { p: 2, '&:last-child': { pb: 2 } } },
         h(Grid, { container: true, spacing: 2, alignItems: 'center' },
+          h(Grid, { item: true, xs: 12, sm: 5 },
+            h(TextField, {
+              placeholder: 'Search order #, customer name, phone, or dish',
+              value: search,
+              onChange: (e) => setSearch(e.target.value),
+              onKeyDown: (e) => e.key === 'Enter' && handleApplyFilter(),
+              size: 'small',
+              fullWidth: true
+            })
+          ),
           h(Grid, { item: true, xs: 12, sm: 4 },
             h(FormControl, { size: 'small', fullWidth: true },
-              h(InputLabel, null, 'Filter by Status'),
-              h(Select, { value: statusId, label: 'Filter by Status', onChange: (e) => setStatusId(e.target.value) },
+              h(InputLabel, null, 'Status filter'),
+              h(Select, { value: statusId, label: 'Status filter', onChange: (e) => setStatusId(e.target.value) },
                 h(MenuItem, { value: '' }, 'All statuses'),
                 statuses.map(s => h(MenuItem, { key: s.id, value: s.id }, s.name))
               )
             )
           ),
-          h(Grid, { item: true, xs: 12, sm: 2 },
-            h(Button, { variant: 'contained', color: 'primary', fullWidth: true, onClick: () => refreshView() }, 'Filter')
+          h(Grid, { item: true, xs: 12, sm: 3 },
+            h(Stack, { direction: 'row', spacing: 1 },
+              h(Button, { variant: 'contained', color: 'primary', fullWidth: true, onClick: handleApplyFilter }, 'Apply'),
+              (search || statusId) && h(Button, { variant: 'outlined', color: 'secondary', onClick: handleClearFilter }, 'Clear')
+            )
           )
         )
       )
     ),
+
     // Orders Table
     h(Card, null,
       h(TableContainer, null,
@@ -1345,37 +1534,73 @@ function VendorOrdersView({ data, vendorBootstrap, vendorLocationId, request, no
               h(TableCell, null, 'Order #'),
               h(TableCell, null, 'Customer'),
               h(TableCell, null, 'Type'),
-              h(TableCell, null, 'Schedule'),
+              h(TableCell, null, 'Items Summary'),
+              h(TableCell, null, 'Time'),
               h(TableCell, null, 'Total'),
               h(TableCell, null, 'Status'),
-              h(TableCell, { align: 'right' }, 'Action')
+              h(TableCell, { align: 'right' }, 'Actions')
             )
           ),
           h(TableBody, null,
             orders.length === 0
-              ? h(TableRow, null, h(TableCell, { colSpan: 7, align: 'center', sx: { py: 4 } }, 'No orders in this view.'))
-              : orders.map(order =>
-                  h(TableRow, { key: order.id },
-                    h(TableCell, null, h(Typography, { variant: 'body2', fontWeight: 700 }, order.number)),
+              ? h(TableRow, null, h(TableCell, { colSpan: 8, align: 'center', sx: { py: 5 } },
+                  h(Box, { sx: { textAlign: 'center' } },
+                    h(Icon, { name: 'receipt_long', sx: { fontSize: 44, color: '#c5b8b0', mb: 1 } }),
+                    h(Typography, { color: 'text.secondary' }, 'No live orders matching these criteria.')
+                  )
+                ))
+              : orders.map(order => {
+                  const typeLabel = (order.type || 'Standard').toUpperCase();
+                  const isDelivery = typeLabel.includes('DELIV');
+                  return h(TableRow, { key: order.id, sx: { '&:hover': { bgcolor: '#fffaf6' } } },
                     h(TableCell, null,
-                      h(Typography, { variant: 'body2', fontWeight: 600 }, order.customer_name),
-                      h(Typography, { variant: 'caption', color: 'text.secondary' }, order.customer_phone || '—')
+                      h(Typography, { variant: 'body2', fontWeight: 800, color: 'primary.main' }, order.number),
+                      h(Typography, { variant: 'caption', color: 'text.secondary' }, `${order.items_count || order.items?.length || 0} items`)
                     ),
-                    h(TableCell, null, h(Chip, { label: order.type || 'Standard', size: 'small' })),
-                    h(TableCell, null, date(order.scheduled_for)),
-                    h(TableCell, null, h(Typography, { variant: 'body2', fontWeight: 700 }, money(order.total))),
                     h(TableCell, null,
-                      h(FormControl, { size: 'small', sx: { minWidth: 140 } },
-                        h(Select, { value: order.status_id, onChange: (e) => handleUpdateStatus(order.id, e.target.value) },
+                      h(Typography, { variant: 'body2', fontWeight: 700 }, order.customer_name),
+                      order.customer_phone && h('a', { href: `tel:${order.customer_phone}`, style: { textDecoration: 'none', color: '#746a62', fontSize: 12, display: 'block' } }, order.customer_phone)
+                    ),
+                    h(TableCell, null,
+                      h(Chip, {
+                        label: isDelivery ? '🚚 Delivery' : '🛍️ Pickup',
+                        size: 'small',
+                        sx: { fontWeight: 700, bgcolor: isDelivery ? '#e3f2fd' : '#fff3e0', color: isDelivery ? '#0d47a1' : '#e65100' }
+                      })
+                    ),
+                    h(TableCell, { sx: { maxWidth: 220 } },
+                      h(Typography, { variant: 'body2', noWrap: true, color: 'text.secondary' },
+                        (order.items || []).map(i => `${i.quantity}x ${i.name}`).join(', ') || `${order.items_count || 1} items`
+                      )
+                    ),
+                    h(TableCell, null,
+                      h(Typography, { variant: 'body2', fontWeight: 600 }, date(order.scheduled_for || order.created_at)),
+                      order.scheduled_for && h(Typography, { variant: 'caption', color: 'text.secondary' }, new Date(order.scheduled_for).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
+                    ),
+                    h(TableCell, null,
+                      h(Typography, { variant: 'body2', fontWeight: 800 }, money(order.total))
+                    ),
+                    h(TableCell, null,
+                      h(FormControl, { size: 'small', sx: { minWidth: 130 } },
+                        h(Select, {
+                          value: order.status_id,
+                          onChange: (e) => handleUpdateStatus(order.id, e.target.value),
+                          sx: { fontSize: '0.85rem', fontWeight: 600 }
+                        },
                           statuses.map(s => h(MenuItem, { key: s.id, value: s.id }, s.name))
                         )
                       )
                     ),
                     h(TableCell, { align: 'right' },
-                      h(Button, { size: 'small', variant: 'outlined', onClick: () => setSelectedOrder(order) }, 'View items')
+                      h(Stack, { direction: 'row', spacing: 1, justifyContent: 'flex-end' },
+                        h(Button, { size: 'small', variant: 'contained', color: 'secondary', onClick: () => setSelectedOrder(order) }, 'Inspect'),
+                        h(IconButton, { size: 'small', color: 'primary', title: 'Print Ticket', onClick: () => printOrderReceipt(order, { name: order.location_name }) },
+                          h(Icon, { name: 'print' })
+                        )
+                      )
                     )
-                  )
-                )
+                  );
+                })
           )
         )
       ),
@@ -1385,32 +1610,147 @@ function VendorOrdersView({ data, vendorBootstrap, vendorLocationId, request, no
         page: page,
         rowsPerPage: 30,
         rowsPerPageOptions: [30],
-        onPageChange: (_, newPage) => setPage(newPage)
+        onPageChange: (_, newPage) => {
+          setPage(newPage);
+          refreshView(newPage + 1, { status_id: statusId, search });
+        }
       })
     ),
 
-    // Order Items Inspection Modal
-    selectedOrder && h(Dialog, { open: true, onClose: () => setSelectedOrder(null), maxWidth: 'sm', fullWidth: true },
-      h(DialogTitle, null, `Order ${selectedOrder.number} Breakdown`),
-      h(DialogContent, null,
-        h(Typography, { variant: 'subtitle2', mb: 1 }, `Customer: ${selectedOrder.customer_name}`),
-        selectedOrder.comment && h(Alert, { severity: 'info', sx: { mb: 2 } }, `Note: ${selectedOrder.comment}`),
-        h(List, null,
-          (selectedOrder.items || []).map((item, idx) =>
-            h(ListItem, { key: idx, divider: true },
-              h(ListItemText, {
-                primary: item.name,
-                secondary: `Qty: ${item.quantity}`
-              })
-            )
-          )
+    // Comprehensive Order Inspection Modal
+    selectedOrder && h(Dialog, { open: true, onClose: () => setSelectedOrder(null), maxWidth: 'md', fullWidth: true },
+      h(DialogTitle, { sx: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 } },
+        h(Box, null,
+          h(Typography, { variant: 'h5', fontWeight: 800 }, `Order ${selectedOrder.number}`),
+          h(Typography, { variant: 'caption', color: 'text.secondary' }, `Placed ${date(selectedOrder.created_at || selectedOrder.scheduled_for)} • Location: ${selectedOrder.location_name || 'Main'}`)
         ),
-        h(Box, { sx: { display: 'flex', justifyContent: 'space-between', mt: 2 } },
-          h(Typography, { variant: 'subtitle1', fontWeight: 700 }, 'Total Amount:'),
-          h(Typography, { variant: 'subtitle1', fontWeight: 700, color: 'primary.main' }, money(selectedOrder.total))
+        h(Stack, { direction: 'row', spacing: 1, alignItems: 'center' },
+          h(Chip, { label: selectedOrder.status_name || 'New', color: 'primary', sx: { fontWeight: 700 } }),
+          h(Button, { size: 'small', variant: 'outlined', onClick: () => printOrderReceipt(selectedOrder, { name: selectedOrder.location_name }) }, 'Print Ticket')
         )
       ),
-      h(DialogActions, null,
+      h(DialogContent, { dividers: true },
+        h(Grid, { container: true, spacing: 2.5 },
+          // Customer & Delivery Details
+          h(Grid, { item: true, xs: 12, md: 5 },
+            h(Paper, { variant: 'outlined', sx: { p: 2, height: '100%' } },
+              h(Typography, { variant: 'subtitle2', fontWeight: 700, mb: 1 }, 'Customer & Fulfillment'),
+              h(Typography, { variant: 'body1', fontWeight: 700 }, selectedOrder.customer_name),
+              selectedOrder.customer_phone && h(Box, { sx: { mt: 0.5 } },
+                h('a', { href: `tel:${selectedOrder.customer_phone}`, style: { color: '#b84f2e', fontWeight: 600, textDecoration: 'none', fontSize: '0.9rem' } }, `📞 ${selectedOrder.customer_phone}`)
+              ),
+              selectedOrder.customer_email && h(Typography, { variant: 'caption', color: 'text.secondary', display: 'block' }, selectedOrder.customer_email),
+              h(Divider, { sx: { my: 1.5 } }),
+              h(Typography, { variant: 'caption', fontWeight: 700, color: 'text.secondary' }, 'TYPE & DESTINATION'),
+              h(Typography, { variant: 'body2', fontWeight: 600, mt: 0.5 }, selectedOrder.type || 'Standard Service'),
+              selectedOrder.delivery_address && h(Box, { sx: { mt: 0.5 } },
+                h(Typography, { variant: 'body2' }, `📍 ${selectedOrder.delivery_address}`),
+                h('a', {
+                  href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedOrder.delivery_address)}`,
+                  target: '_blank',
+                  rel: 'noopener',
+                  style: { fontSize: 12, color: '#b84f2e', fontWeight: 600 }
+                }, 'Open in Google Maps')
+              ),
+              selectedOrder.comment && h(Alert, { severity: 'warning', sx: { mt: 2, '& .MuiAlert-message': { fontSize: '0.85rem' } } },
+                h(Typography, { variant: 'caption', fontWeight: 700, display: 'block' }, 'KITCHEN NOTE:'),
+                selectedOrder.comment
+              )
+            )
+          ),
+
+          // Items Breakdown & Options
+          h(Grid, { item: true, xs: 12, md: 7 },
+            h(Paper, { variant: 'outlined', sx: { p: 2 } },
+              h(Typography, { variant: 'subtitle2', fontWeight: 700, mb: 1 }, 'Order Items Breakdown'),
+              h(List, { disablePadding: true },
+                (selectedOrder.items || []).map((item, idx) =>
+                  h(ListItem, { key: idx, divider: idx < selectedOrder.items.length - 1, sx: { px: 0, py: 1.5 } },
+                    h(ListItemText, {
+                      primary: h(Box, { sx: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+                        h(Typography, { variant: 'body1', fontWeight: 700 }, `${item.quantity}x ${item.name}`),
+                        h(Typography, { variant: 'body1', fontWeight: 700 }, money(item.subtotal || (item.price * item.quantity)))
+                      ),
+                      secondary: h(Box, { sx: { mt: 0.5 } },
+                        (item.options || []).map((opt, optIdx) =>
+                          h(Typography, { key: optIdx, variant: 'caption', display: 'block', color: 'text.secondary', pl: 1 },
+                            `• ${opt.quantity > 1 ? opt.quantity + 'x ' : ''}${opt.name} ${opt.price ? `(+${money(opt.price)})` : ''}`
+                          )
+                        ),
+                        item.comment && h(Typography, { variant: 'caption', fontStyle: 'italic', color: 'warning.dark', display: 'block', pl: 1, mt: 0.5 },
+                          `"${item.comment}"`
+                        )
+                      )
+                    })
+                  )
+                )
+              ),
+              h(Divider, { sx: { my: 1.5 } }),
+              h(Box, { sx: { display: 'flex', justifyContent: 'space-between', mb: 0.5 } },
+                h(Typography, { variant: 'body2', color: 'text.secondary' }, 'Payment Method:'),
+                h(Typography, { variant: 'body2', fontWeight: 600, textTransform: 'uppercase' }, selectedOrder.payment_method || 'COD')
+              ),
+              h(Box, { sx: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+                h(Typography, { variant: 'h6', fontWeight: 800 }, 'Total Amount:'),
+                h(Typography, { variant: 'h5', fontWeight: 800, color: 'primary.main' }, money(selectedOrder.total))
+              )
+            )
+          ),
+
+          // Status Transition with Notes Form
+          h(Grid, { item: true, xs: 12 },
+            h(Paper, { variant: 'outlined', sx: { p: 2, bgcolor: '#fffaf4' } },
+              h(Typography, { variant: 'subtitle2', fontWeight: 700, mb: 1.5 }, 'Update Order Status'),
+              h(Grid, { container: true, spacing: 2, alignItems: 'center' },
+                h(Grid, { item: true, xs: 12, sm: 4 },
+                  h(FormControl, { size: 'small', fullWidth: true },
+                    h(InputLabel, null, 'Change status to'),
+                    h(Select, {
+                      value: selectedOrder.status_id,
+                      label: 'Change status to',
+                      onChange: (e) => handleUpdateStatus(selectedOrder.id, e.target.value, statusComment, notifyCustomer)
+                    },
+                      statuses.map(s => h(MenuItem, { key: s.id, value: s.id }, s.name))
+                    )
+                  )
+                ),
+                h(Grid, { item: true, xs: 12, sm: 5 },
+                  h(TextField, {
+                    label: 'Status note / comment (optional)',
+                    value: statusComment,
+                    onChange: (e) => setStatusComment(e.target.value),
+                    size: 'small',
+                    fullWidth: true
+                  })
+                ),
+                h(Grid, { item: true, xs: 12, sm: 3 },
+                  h(FormControlLabel, {
+                    control: h(Checkbox, { checked: notifyCustomer, onChange: (e) => setNotifyCustomer(e.target.checked) }),
+                    label: 'Notify customer'
+                  })
+                )
+              )
+            )
+          ),
+
+          // Status Timeline History
+          selectedOrder.timeline?.length > 0 && h(Grid, { item: true, xs: 12 },
+            h(Typography, { variant: 'subtitle2', fontWeight: 700, mb: 1 }, 'Status History Timeline'),
+            h(Stack, { spacing: 1 },
+              selectedOrder.timeline.map((hist, histIdx) =>
+                h(Paper, { key: histIdx, variant: 'outlined', sx: { p: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+                  h(Box, null,
+                    h(Chip, { label: hist.status, size: 'small', sx: { mr: 1, fontWeight: 700 } }),
+                    hist.comment && h(Typography, { variant: 'body2', component: 'span', color: 'text.secondary' }, hist.comment)
+                  ),
+                  h(Typography, { variant: 'caption', color: 'text.secondary' }, date(hist.created_at))
+                )
+              )
+            )
+          )
+        )
+      ),
+      h(DialogActions, { sx: { p: 2 } },
         h(Button, { onClick: () => setSelectedOrder(null) }, 'Close')
       )
     )
@@ -1567,39 +1907,122 @@ function OrdersView({ data, ownerBootstrap, restaurant, request, notify, refresh
   const [locationId, setLocationId] = useState('');
   const [statusId, setStatusId] = useState('');
   const [page, setPage] = useState(0);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [statusComment, setStatusComment] = useState('');
+  const [notifyCustomer, setNotifyCustomer] = useState(true);
 
   const orders = data?.data || [];
   const meta = data?.meta || { total: orders.length, per_page: 25 };
   const statuses = ownerBootstrap?.order_statuses || [];
   const locations = ownerBootstrap?.locations || [];
 
-  const handleStatusChange = async (orderId, newStatus) => {
+  // Live Auto-Refresh polling (every 15s)
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(() => {
+      refreshView(page + 1, { search, location_id: locationId, status_id: statusId });
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [autoRefresh, page, search, locationId, statusId, refreshView]);
+
+  const handleApplyFilters = () => {
+    setPage(0);
+    refreshView(1, { search, location_id: locationId, status_id: statusId });
+  };
+
+  const handleClearFilters = () => {
+    setSearch('');
+    setLocationId('');
+    setStatusId('');
+    setPage(0);
+    refreshView(1, {});
+  };
+
+  const handleStatusChange = async (orderId, newStatus, comment = statusComment, notifyCust = notifyCustomer) => {
     try {
-      await request(`/api/v1/owner/orders/${orderId}/status`, {
+      const res = await request(`/api/v1/owner/orders/${orderId}/status`, {
         method: 'PATCH',
-        body: { status_id: Number(newStatus), notify: true }
+        body: { status_id: Number(newStatus), comment: comment || undefined, notify: notifyCust }
       });
       notify('Order status updated.', 'success');
-      refreshView();
+      if (selectedOrder && selectedOrder.id === orderId && res.data) {
+        setSelectedOrder(res.data);
+      }
+      setStatusComment('');
+      refreshView(page + 1, { search, location_id: locationId, status_id: statusId });
     } catch (err) {
       notify(err.message, 'error');
     }
   };
 
+  // KPI Calculations
+  const totalVolume = orders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+  const waitingCount = orders.filter(o => o.status_id === 1 || o.status_name?.toLowerCase().includes('received') || o.status_name?.toLowerCase().includes('pending') || o.status_name?.toLowerCase().includes('new')).length;
+  const inPrepCount = orders.filter(o => o.status_name?.toLowerCase().includes('prep') || o.status_name?.toLowerCase().includes('cook') || o.status_name?.toLowerCase().includes('process')).length;
+  const completedCount = orders.filter(o => o.status_name?.toLowerCase().includes('deliv') || o.status_name?.toLowerCase().includes('complete') || o.status_name?.toLowerCase().includes('done')).length;
+
   return h(Box, null,
-    h(Box, { sx: { mb: 3 } },
-      h(Typography, { variant: 'h4' }, 'Orders'),
-      h(Typography, { variant: 'subtitle1' }, 'Search and update orders across every restaurant location.')
+    // Header & Auto-Refresh Bar
+    h(Box, { sx: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 } },
+      h(Box, null,
+        h(Typography, { variant: 'h4' }, 'Orders Management'),
+        h(Typography, { variant: 'subtitle1' }, 'Search, track, and fulfill orders across every restaurant location.')
+      ),
+      h(Stack, { direction: 'row', spacing: 2, alignItems: 'center' },
+        h(Paper, { variant: 'outlined', sx: { px: 2, py: 0.5, display: 'flex', alignItems: 'center', gap: 1, bgcolor: autoRefresh ? '#f0f8f4' : 'transparent' } },
+          h(Box, {
+            sx: {
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              bgcolor: autoRefresh ? 'success.main' : 'text.disabled',
+              animation: autoRefresh ? 'pulse 2s infinite' : 'none'
+            }
+          }),
+          h(Typography, { variant: 'body2', fontWeight: 600, color: autoRefresh ? 'success.dark' : 'text.secondary' },
+            autoRefresh ? 'Live refresh on (15s)' : 'Live refresh paused'
+          ),
+          h(Switch, {
+            size: 'small',
+            checked: autoRefresh,
+            onChange: (e) => setAutoRefresh(e.target.checked),
+            color: 'success'
+          })
+        ),
+        h(Button, {
+          variant: 'outlined',
+          onClick: () => refreshView(page + 1, { search, location_id: locationId, status_id: statusId })
+        }, 'Refresh')
+      )
     ),
+
+    // KPI Metrics Cards
+    h(Grid, { container: true, spacing: 2, sx: { mb: 3 } },
+      h(Grid, { item: true, xs: 12, sm: 6, md: 3 },
+        h(MetricCard, { label: 'Orders in view', value: orders.length, icon: 'receipt_long' })
+      ),
+      h(Grid, { item: true, xs: 12, sm: 6, md: 3 },
+        h(MetricCard, { label: 'New / Waiting', value: waitingCount, icon: 'schedule', color: 'warning.main' })
+      ),
+      h(Grid, { item: true, xs: 12, sm: 6, md: 3 },
+        h(MetricCard, { label: 'In Preparation', value: inPrepCount, icon: 'restaurant', color: 'primary.main' })
+      ),
+      h(Grid, { item: true, xs: 12, sm: 6, md: 3 },
+        h(MetricCard, { label: 'Total Volume', value: money(totalVolume, restaurant?.currency_code), icon: 'payments', color: 'success.main' })
+      )
+    ),
+
     // Filter Bar
     h(Card, { sx: { mb: 3 } },
       h(CardContent, { sx: { p: 2, '&:last-child': { pb: 2 } } },
         h(Grid, { container: true, spacing: 2, alignItems: 'center' },
           h(Grid, { item: true, xs: 12, sm: 4 },
             h(TextField, {
-              placeholder: 'Search order, customer or email',
+              placeholder: 'Search order #, customer, phone, or email',
               value: search,
               onChange: (e) => setSearch(e.target.value),
+              onKeyDown: (e) => e.key === 'Enter' && handleApplyFilters(),
               size: 'small',
               fullWidth: true
             })
@@ -1623,58 +2046,94 @@ function OrdersView({ data, ownerBootstrap, restaurant, request, notify, refresh
             )
           ),
           h(Grid, { item: true, xs: 12, sm: 2 },
-            h(Button, {
-              variant: 'contained',
-              color: 'primary',
-              fullWidth: true,
-              onClick: () => refreshView()
-            }, 'Apply')
+            h(Stack, { direction: 'row', spacing: 1 },
+              h(Button, { variant: 'contained', color: 'primary', fullWidth: true, onClick: handleApplyFilters }, 'Filter'),
+              (search || locationId || statusId) && h(Button, { variant: 'outlined', color: 'secondary', onClick: handleClearFilters }, 'Clear')
+            )
           )
         )
       )
     ),
+
     // Orders Table
     h(Card, null,
       h(TableContainer, null,
         h(Table, null,
           h(TableHead, null,
             h(TableRow, null,
-              h(TableCell, null, 'Order'),
+              h(TableCell, null, 'Order #'),
               h(TableCell, null, 'Customer'),
+              h(TableCell, null, 'Type'),
               h(TableCell, null, 'Location'),
+              h(TableCell, null, 'Items Summary'),
               h(TableCell, null, 'Schedule'),
               h(TableCell, null, 'Total'),
-              h(TableCell, null, 'Status')
+              h(TableCell, null, 'Status'),
+              h(TableCell, { align: 'right' }, 'Actions')
             )
           ),
           h(TableBody, null,
             orders.length === 0
-              ? h(TableRow, null, h(TableCell, { colSpan: 6, align: 'center', sx: { py: 4 } }, 'No orders match these filters.'))
-              : orders.map(order =>
-                  h(TableRow, { key: order.id },
+              ? h(TableRow, null, h(TableCell, { colSpan: 9, align: 'center', sx: { py: 5 } },
+                  h(Box, { sx: { textAlign: 'center' } },
+                    h(Icon, { name: 'receipt_long', sx: { fontSize: 44, color: '#c5b8b0', mb: 1 } }),
+                    h(Typography, { color: 'text.secondary' }, 'No orders match the selected filters.')
+                  )
+                ))
+              : orders.map(order => {
+                  const typeLabel = (order.type || 'Standard').toUpperCase();
+                  const isDelivery = typeLabel.includes('DELIV');
+                  return h(TableRow, { key: order.id, sx: { '&:hover': { bgcolor: '#fffaf6' } } },
                     h(TableCell, null,
-                      h(Typography, { variant: 'body2', fontWeight: 700 }, order.number),
-                      h(Typography, { variant: 'caption', color: 'text.secondary' }, `${order.type || ''} • ${order.items_count || 0} items`)
+                      h(Typography, { variant: 'body2', fontWeight: 800, color: 'primary.main' }, order.number),
+                      h(Typography, { variant: 'caption', color: 'text.secondary' }, `${order.items_count || order.items?.length || 0} items`)
                     ),
                     h(TableCell, null,
-                      h(Typography, { variant: 'body2', fontWeight: 600 }, order.customer_name),
-                      h(Typography, { variant: 'caption', color: 'text.secondary' }, order.customer_phone || '—')
+                      h(Typography, { variant: 'body2', fontWeight: 700 }, order.customer_name),
+                      order.customer_phone && h('a', { href: `tel:${order.customer_phone}`, style: { textDecoration: 'none', color: '#746a62', fontSize: 12, display: 'block' } }, order.customer_phone)
+                    ),
+                    h(TableCell, null,
+                      h(Chip, {
+                        label: isDelivery ? '🚚 Delivery' : '🛍️ Pickup',
+                        size: 'small',
+                        sx: { fontWeight: 700, bgcolor: isDelivery ? '#e3f2fd' : '#fff3e0', color: isDelivery ? '#0d47a1' : '#e65100' }
+                      })
                     ),
                     h(TableCell, null, order.location_name || '—'),
-                    h(TableCell, null, date(order.scheduled_for)),
-                    h(TableCell, null, h(Typography, { variant: 'body2', fontWeight: 700 }, money(order.total, restaurant?.currency_code))),
+                    h(TableCell, { sx: { maxWidth: 200 } },
+                      h(Typography, { variant: 'body2', noWrap: true, color: 'text.secondary' },
+                        (order.items || []).map(i => `${i.quantity}x ${i.name}`).join(', ') || `${order.items_count || 1} items`
+                      )
+                    ),
                     h(TableCell, null,
-                      h(FormControl, { size: 'small', sx: { minWidth: 140 } },
+                      h(Typography, { variant: 'body2', fontWeight: 600 }, date(order.scheduled_for || order.created_at)),
+                      order.scheduled_for && h(Typography, { variant: 'caption', color: 'text.secondary' }, new Date(order.scheduled_for).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
+                    ),
+                    h(TableCell, null,
+                      h(Typography, { variant: 'body2', fontWeight: 800 }, money(order.total, restaurant?.currency_code)),
+                      h(Typography, { variant: 'caption', color: 'text.secondary', textTransform: 'uppercase' }, order.payment_method || 'COD')
+                    ),
+                    h(TableCell, null,
+                      h(FormControl, { size: 'small', sx: { minWidth: 130 } },
                         h(Select, {
                           value: order.status_id,
-                          onChange: (e) => handleStatusChange(order.id, e.target.value)
+                          onChange: (e) => handleStatusChange(order.id, e.target.value),
+                          sx: { fontSize: '0.85rem', fontWeight: 600 }
                         },
                           statuses.map(s => h(MenuItem, { key: s.id, value: s.id }, s.name))
                         )
                       )
+                    ),
+                    h(TableCell, { align: 'right' },
+                      h(Stack, { direction: 'row', spacing: 1, justifyContent: 'flex-end' },
+                        h(Button, { size: 'small', variant: 'contained', color: 'secondary', onClick: () => setSelectedOrder(order) }, 'Details'),
+                        h(IconButton, { size: 'small', color: 'primary', title: 'Print Receipt', onClick: () => printOrderReceipt(order, restaurant) },
+                          h(Icon, { name: 'print' })
+                        )
+                      )
                     )
-                  )
-                )
+                  );
+                })
           )
         )
       ),
@@ -1684,8 +2143,151 @@ function OrdersView({ data, ownerBootstrap, restaurant, request, notify, refresh
         page: page,
         rowsPerPage: 25,
         rowsPerPageOptions: [25],
-        onPageChange: (_, newPage) => setPage(newPage)
+        onPageChange: (_, newPage) => {
+          setPage(newPage);
+          refreshView(newPage + 1, { search, location_id: locationId, status_id: statusId });
+        }
       })
+    ),
+
+    // Comprehensive Order Details Modal
+    selectedOrder && h(Dialog, { open: true, onClose: () => setSelectedOrder(null), maxWidth: 'md', fullWidth: true },
+      h(DialogTitle, { sx: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 } },
+        h(Box, null,
+          h(Typography, { variant: 'h5', fontWeight: 800 }, `Order ${selectedOrder.number}`),
+          h(Typography, { variant: 'caption', color: 'text.secondary' }, `Placed ${date(selectedOrder.created_at || selectedOrder.scheduled_for)} • Branch: ${selectedOrder.location_name || 'Main Location'}`)
+        ),
+        h(Stack, { direction: 'row', spacing: 1, alignItems: 'center' },
+          h(Chip, { label: selectedOrder.status_name || 'New', color: 'primary', sx: { fontWeight: 700 } }),
+          h(Button, { size: 'small', variant: 'outlined', onClick: () => printOrderReceipt(selectedOrder, restaurant) }, 'Print Receipt')
+        )
+      ),
+      h(DialogContent, { dividers: true },
+        h(Grid, { container: true, spacing: 2.5 },
+          // Customer & Delivery Info Card
+          h(Grid, { item: true, xs: 12, md: 5 },
+            h(Paper, { variant: 'outlined', sx: { p: 2, height: '100%' } },
+              h(Typography, { variant: 'subtitle2', fontWeight: 700, mb: 1 }, 'Customer & Fulfillment'),
+              h(Typography, { variant: 'body1', fontWeight: 700 }, selectedOrder.customer_name),
+              selectedOrder.customer_phone && h(Box, { sx: { mt: 0.5 } },
+                h('a', { href: `tel:${selectedOrder.customer_phone}`, style: { color: '#b84f2e', fontWeight: 600, textDecoration: 'none', fontSize: '0.9rem' } }, `📞 ${selectedOrder.customer_phone}`)
+              ),
+              selectedOrder.customer_email && h(Box, { sx: { mt: 0.5 } },
+                h('a', { href: `mailto:${selectedOrder.customer_email}`, style: { color: '#746a62', textDecoration: 'none', fontSize: '0.85rem' } }, `✉️ ${selectedOrder.customer_email}`)
+              ),
+              h(Divider, { sx: { my: 1.5 } }),
+              h(Typography, { variant: 'caption', fontWeight: 700, color: 'text.secondary' }, 'ORDER TYPE & DESTINATION'),
+              h(Typography, { variant: 'body2', fontWeight: 600, mt: 0.5 }, selectedOrder.type || 'Standard Service'),
+              selectedOrder.delivery_address && h(Box, { sx: { mt: 0.5 } },
+                h(Typography, { variant: 'body2' }, `📍 ${selectedOrder.delivery_address}`),
+                h('a', {
+                  href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedOrder.delivery_address)}`,
+                  target: '_blank',
+                  rel: 'noopener',
+                  style: { fontSize: 12, color: '#b84f2e', fontWeight: 600 }
+                }, 'Open in Google Maps')
+              ),
+              selectedOrder.comment && h(Alert, { severity: 'info', sx: { mt: 2, '& .MuiAlert-message': { fontSize: '0.85rem' } } },
+                h(Typography, { variant: 'caption', fontWeight: 700, display: 'block' }, 'CUSTOMER NOTE:'),
+                selectedOrder.comment
+              )
+            )
+          ),
+
+          // Items Breakdown Card
+          h(Grid, { item: true, xs: 12, md: 7 },
+            h(Paper, { variant: 'outlined', sx: { p: 2 } },
+              h(Typography, { variant: 'subtitle2', fontWeight: 700, mb: 1 }, 'Order Items Breakdown'),
+              h(List, { disablePadding: true },
+                (selectedOrder.items || []).map((item, idx) =>
+                  h(ListItem, { key: idx, divider: idx < selectedOrder.items.length - 1, sx: { px: 0, py: 1.5 } },
+                    h(ListItemText, {
+                      primary: h(Box, { sx: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+                        h(Typography, { variant: 'body1', fontWeight: 700 }, `${item.quantity}x ${item.name}`),
+                        h(Typography, { variant: 'body1', fontWeight: 700 }, money(item.subtotal || (item.price * item.quantity), restaurant?.currency_code))
+                      ),
+                      secondary: h(Box, { sx: { mt: 0.5 } },
+                        (item.options || []).map((opt, optIdx) =>
+                          h(Typography, { key: optIdx, variant: 'caption', display: 'block', color: 'text.secondary', pl: 1 },
+                            `• ${opt.quantity > 1 ? opt.quantity + 'x ' : ''}${opt.name} ${opt.price ? `(+${money(opt.price, restaurant?.currency_code)})` : ''}`
+                          )
+                        ),
+                        item.comment && h(Typography, { variant: 'caption', fontStyle: 'italic', color: 'warning.dark', display: 'block', pl: 1, mt: 0.5 },
+                          `"${item.comment}"`
+                        )
+                      )
+                    })
+                  )
+                )
+              ),
+              h(Divider, { sx: { my: 1.5 } }),
+              h(Box, { sx: { display: 'flex', justifyContent: 'space-between', mb: 0.5 } },
+                h(Typography, { variant: 'body2', color: 'text.secondary' }, 'Payment Method:'),
+                h(Typography, { variant: 'body2', fontWeight: 600, textTransform: 'uppercase' }, selectedOrder.payment_method || 'COD')
+              ),
+              h(Box, { sx: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+                h(Typography, { variant: 'h6', fontWeight: 800 }, 'Total Amount:'),
+                h(Typography, { variant: 'h5', fontWeight: 800, color: 'primary.main' }, money(selectedOrder.total, restaurant?.currency_code))
+              )
+            )
+          ),
+
+          // Status Transition with Notes Form
+          h(Grid, { item: true, xs: 12 },
+            h(Paper, { variant: 'outlined', sx: { p: 2, bgcolor: '#fffaf4' } },
+              h(Typography, { variant: 'subtitle2', fontWeight: 700, mb: 1.5 }, 'Update Order Status & Notify Customer'),
+              h(Grid, { container: true, spacing: 2, alignItems: 'center' },
+                h(Grid, { item: true, xs: 12, sm: 4 },
+                  h(FormControl, { size: 'small', fullWidth: true },
+                    h(InputLabel, null, 'Change status to'),
+                    h(Select, {
+                      value: selectedOrder.status_id,
+                      label: 'Change status to',
+                      onChange: (e) => handleStatusChange(selectedOrder.id, e.target.value, statusComment, notifyCustomer)
+                    },
+                      statuses.map(s => h(MenuItem, { key: s.id, value: s.id }, s.name))
+                    )
+                  )
+                ),
+                h(Grid, { item: true, xs: 12, sm: 5 },
+                  h(TextField, {
+                    label: 'Status note / comment (optional)',
+                    value: statusComment,
+                    onChange: (e) => setStatusComment(e.target.value),
+                    size: 'small',
+                    fullWidth: true
+                  })
+                ),
+                h(Grid, { item: true, xs: 12, sm: 3 },
+                  h(FormControlLabel, {
+                    control: h(Checkbox, { checked: notifyCustomer, onChange: (e) => setNotifyCustomer(e.target.checked) }),
+                    label: 'Notify customer'
+                  })
+                )
+              )
+            )
+          ),
+
+          // Status Timeline History
+          selectedOrder.timeline?.length > 0 && h(Grid, { item: true, xs: 12 },
+            h(Typography, { variant: 'subtitle2', fontWeight: 700, mb: 1 }, 'Status History Timeline'),
+            h(Stack, { spacing: 1 },
+              selectedOrder.timeline.map((hist, histIdx) =>
+                h(Paper, { key: histIdx, variant: 'outlined', sx: { p: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+                  h(Box, null,
+                    h(Chip, { label: hist.status, size: 'small', sx: { mr: 1, fontWeight: 700 } }),
+                    hist.comment && h(Typography, { variant: 'body2', component: 'span', color: 'text.secondary' }, hist.comment)
+                  ),
+                  h(Typography, { variant: 'caption', color: 'text.secondary' }, date(hist.created_at))
+                )
+              )
+            )
+          )
+        )
+      ),
+      h(DialogActions, { sx: { p: 2 } },
+        h(Button, { onClick: () => setSelectedOrder(null) }, 'Close')
+      )
     )
   );
 }
