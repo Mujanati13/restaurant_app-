@@ -104,6 +104,9 @@ Route::prefix('v1')->group(function (): void {
         Route::get('media/{publicId}', [TenantMediaController::class, 'show'])->whereUuid('publicId');
         Route::post('analytics/events', [StorefrontAnalyticsController::class, 'store'])->middleware('throttle:120,1');
 
+        Route::post('orders', [StorefrontCommerceController::class, 'createOrder']);
+        Route::post('reservations', [StorefrontCommerceController::class, 'createReservation']);
+
         Route::middleware([Authenticate::class, 'restaurant.customer'])->group(function (): void {
             Route::post('push-subscriptions', fn(Request $request, MobilePushController $controller) => $controller->store($request, 'customer'));
             Route::delete('push-subscriptions', fn(Request $request, MobilePushController $controller) => $controller->destroy($request, 'customer'));
@@ -112,10 +115,8 @@ Route::prefix('v1')->group(function (): void {
             Route::get('addresses', [StorefrontCommerceController::class, 'addresses']);
             Route::post('addresses', [StorefrontCommerceController::class, 'createAddress']);
             Route::get('orders', [StorefrontCommerceController::class, 'orders']);
-            Route::post('orders', [StorefrontCommerceController::class, 'createOrder']);
             Route::get('orders/{orderId}', [StorefrontCommerceController::class, 'order'])->whereNumber('orderId');
             Route::get('reservations', [StorefrontCommerceController::class, 'reservations']);
-            Route::post('reservations', [StorefrontCommerceController::class, 'createReservation']);
             Route::delete('token', [StorefrontSessionController::class, 'destroy']);
         });
     });

@@ -96,25 +96,55 @@ class StorefrontCommerceController extends Controller
 
     public function createOrder(Request $request): JsonResponse
     {
-        $customer = $this->customer($request);
+        $customer = $this->customer($request, true);
+        $settings = $this->tenant->get()->settings()->pluck('value', 'key')->all();
+        $guestAllowed = filter_var($settings['guest_checkout_enabled'] ?? true, FILTER_VALIDATE_BOOLEAN);
+
+        if (!$customer && !$guestAllowed) {
+            abort(401, 'Please sign in or create an account to place an order.');
+        }
+
         $data = $request->validate([
             'location_id' => ['required', 'integer', Rule::exists('locations', 'location_id')->where('restaurant_id', $this->tenant->id())],
             'order_type' => ['required', Rule::in(['delivery', 'collection'])],
-            'first_name' => ['required', 'string', 'between:1,48'], 'last_name' => ['required', 'string', 'between:1,48'],
-            'telephone' => ['required', 'string', 'max:64'], 'comment' => ['nullable', 'string', 'max:500'],
+            'first_name' => ['required', 'string', 'between:1,48'],
+            'last_name' => ['required', 'string', 'between:1,48'],
+            'email' => [$customer ? 'nullable' : 'required', 'email', 'max:96'],
+            'telephone' => ['required', 'string', 'max:64'],
+            'comment' => ['nullable', 'string', 'max:500'],
             'payment_method' => ['nullable', 'string', 'in:cod,card_on_delivery,stripe,paypal,bank_transfer'],
-            'items' => ['required', 'array', 'between:1,100'], 'items.*.menu_id' => ['required', 'integer'],
-            'items.*.quantity' => ['required', 'integer', 'between:1,50'], 'items.*.comment' => ['nullable', 'string', 'max:300'],
+            'tip_amount' => ['nullable', 'numeric', 'min:0'],
+            'items' => ['required', 'array', 'between:1,100'],
+            'items.*.menu_id' => ['required', 'integer'],
+            'items.*.quantity' => ['required', 'integer', 'between:1,50'],
+            'items.*.comment' => ['nullable', 'string', 'max:300'],
             'items.*.options' => ['nullable', 'array', 'max:50'],
             'items.*.options.*.option_id' => ['required', 'integer'],
             'items.*.options.*.values' => ['required', 'array', 'max:50'],
             'items.*.options.*.values.*.value_id' => ['required', 'integer'],
             'items.*.options.*.values.*.quantity' => ['nullable', 'integer', 'between:1,50'],
-            'address' => ['required_if:order_type,delivery', 'array'], 'address.address_1' => ['required_if:order_type,delivery', 'string', 'max:128'],
-            'address.address_2' => ['nullable', 'string', 'max:128'], 'address.city' => ['required_if:order_type,delivery', 'string', 'max:128'],
-            'address.state' => ['nullable', 'string', 'max:128'], 'address.postcode' => ['required_if:order_type,delivery', 'string', 'max:20'],
+            'address' => ['required_if:order_type,delivery', 'array'],
+            'address.address_1' => ['required_if:order_type,delivery', 'string', 'max:128'],
+            'address.address_2' => ['nullable', 'string', 'max:128'],
+            'address.city' => ['required_if:order_type,delivery', 'string', 'max:128'],
+            'address.state' => ['nullable', 'string', 'max:128'],
+            'address.postcode' => ['required_if:order_type,delivery', 'string', 'max:20'],
             'address.country_id' => ['required_if:order_type,delivery', 'integer', 'exists:countries,country_id'],
         ]);
+
+        if (!$customer) {
+            $customer = Customer::query()->where('restaurant_id', $this->tenant->id())
+                ->firstOrCreate(
+                    ['email' => $data['email'], 'restaurant_id' => $this->tenant->id()],
+                    [
+                        'first_name' => $data['first_name'],
+                        'last_name' => $data['last_name'],
+                        'telephone' => $data['telephone'],
+                        'status' => true,
+                    ]
+                );
+        }
+
         abort_unless($this->settings->boolean('orders_enabled', true, (int) $data['location_id']), 403, 'Online ordering is not enabled for this location.');
         abort_unless(
             $this->settings->boolean($data['order_type'].'_enabled', true, (int) $data['location_id']),
@@ -122,7 +152,7 @@ class StorefrontCommerceController extends Controller
             ucfirst($data['order_type']).' ordering is not enabled for this restaurant.',
         );
 
-        return $this->idempotency->run($request, 'storefront.order.create', function () use ($request, $customer, $data): array {
+        return $this->idempotency->run($request, 'storefront.order.create', function () use ($request, $customer, $data, $settings): array {
             $location = Location::query()->where('restaurant_id', $this->tenant->id())->findOrFail($data['location_id']);
             $menuIds = collect($data['items'])->pluck('menu_id')->unique()->values();
             $menus = Menu::query()->with(['menu_options.menu_option_values.option_value'])
@@ -132,11 +162,20 @@ class StorefrontCommerceController extends Controller
 
             $order = new Order;
             $order->fill([
-                'customer_id' => $customer->getKey(), 'restaurant_id' => $this->tenant->id(), 'location_id' => $location->getKey(),
-                'first_name' => $data['first_name'], 'last_name' => $data['last_name'], 'email' => $customer->email,
-                'telephone' => $data['telephone'], 'order_type' => $data['order_type'], 'comment' => $data['comment'] ?? null,
-                'payment' => $data['payment_method'] ?? 'cod', 'status_id' => $this->settings->integer('default_order_status_id', (int) setting('default_order_status'), (int) $data['location_id']),
-                'order_date' => now()->toDateString(), 'order_time' => now()->format('H:i'), 'order_time_is_asap' => true,
+                'customer_id' => $customer->getKey(),
+                'restaurant_id' => $this->tenant->id(),
+                'location_id' => $location->getKey(),
+                'first_name' => $data['first_name'],
+                'last_name' => $data['last_name'],
+                'email' => $customer->email,
+                'telephone' => $data['telephone'],
+                'order_type' => $data['order_type'],
+                'comment' => $data['comment'] ?? null,
+                'payment' => $data['payment_method'] ?? 'cod',
+                'status_id' => $this->settings->integer('default_order_status_id', (int) setting('default_order_status'), (int) $data['location_id']),
+                'order_date' => now()->toDateString(),
+                'order_time' => now()->format('H:i'),
+                'order_time_is_asap' => true,
             ]);
             if ($data['order_type'] === 'delivery') {
                 $address = $customer->addresses()->create([...$data['address'], 'restaurant_id' => $this->tenant->id()]);
@@ -164,8 +203,19 @@ class StorefrontCommerceController extends Controller
                 ->update(['restaurant_id' => $this->tenant->id()]);
             \Illuminate\Support\Facades\DB::table('order_menu_options')->where('order_id', $order->getKey())
                 ->update(['restaurant_id' => $this->tenant->id()]);
+
             $subtotal = collect($items)->sum(fn(CartItem $item) => $item->subtotal());
-            $order->forceFill(['total_items' => collect($items)->sum('qty'), 'order_total' => $subtotal])->saveQuietly();
+            $deliveryFee = $data['order_type'] === 'delivery' ? (float)$this->settings->get('delivery_charge', 0.0, (int)$location->getKey()) : 0.0;
+            $taxRate = (float)($settings['tax_rate'] ?? 0);
+            $taxAmount = $taxRate > 0 ? round($subtotal * ($taxRate / 100), 2) : 0.0;
+            $tipAmount = isset($data['tip_amount']) ? (float)$data['tip_amount'] : 0.0;
+            $total = $subtotal + $deliveryFee + $taxAmount + $tipAmount;
+
+            $order->forceFill([
+                'total_items' => collect($items)->sum('qty'),
+                'order_total' => $total,
+            ])->saveQuietly();
+
             $order->updateOrderStatus($order->status_id, ['notify' => true]);
             SendTenantPush::dispatch($this->tenant->id(), 'vendor', 'New order', 'A new order is ready for review.',
                 ['type' => 'order', 'id' => (string) $order->getKey(), 'route' => '/orders/'.$order->getKey()]);
@@ -187,15 +237,31 @@ class StorefrontCommerceController extends Controller
 
     public function createReservation(Request $request): JsonResponse
     {
-        $customer = $this->customer($request);
+        $customer = $this->customer($request, true);
         $data = $request->validate([
             'location_id' => ['required', 'integer', Rule::exists('locations', 'location_id')->where('restaurant_id', $this->tenant->id())],
             'table_id' => ['nullable', 'integer'], 'guest_num' => ['required', 'integer', 'between:1,100'],
             'reserve_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'], 'reserve_time' => ['required', 'date_format:H:i'],
             'duration' => ['nullable', 'integer', 'between:15,480'], 'first_name' => ['required', 'string', 'between:1,48'],
-            'last_name' => ['required', 'string', 'between:1,48'], 'telephone' => ['required', 'string', 'max:64'],
+            'last_name' => ['required', 'string', 'between:1,48'],
+            'email' => [$customer ? 'nullable' : 'required', 'email', 'max:96'],
+            'telephone' => ['required', 'string', 'max:64'],
             'comment' => ['nullable', 'string', 'max:520'],
         ]);
+
+        if (!$customer) {
+            $customer = Customer::query()->where('restaurant_id', $this->tenant->id())
+                ->firstOrCreate(
+                    ['email' => $data['email'], 'restaurant_id' => $this->tenant->id()],
+                    [
+                        'first_name' => $data['first_name'],
+                        'last_name' => $data['last_name'],
+                        'telephone' => $data['telephone'],
+                        'status' => true,
+                    ]
+                );
+        }
+
         abort_unless($this->settings->boolean('reservations_enabled', true, (int) $data['location_id']), 403, 'Reservations are not enabled for this location.');
 
         return $this->idempotency->run($request, 'storefront.reservation.create', function () use ($request, $customer, $data): array {
@@ -222,7 +288,18 @@ class StorefrontCommerceController extends Controller
         });
     }
 
-    private function customer(Request $request): Customer
+    private function customer(Request $request, bool $allowGuest = false): ?Customer
+    {
+        /** @var Customer|null $customer */
+        $customer = $request->user();
+        if (!$customer && $allowGuest) {
+            return null;
+        }
+        if (!$customer) {
+            abort(401, 'Unauthenticated.');
+        }
+        return $customer;
+    }
     {
         /** @var Customer $customer */
         $customer = $request->user();

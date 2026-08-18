@@ -48,21 +48,101 @@ class StorefrontTenantController extends Controller
         }
         $primaryHost = $restaurant->domains()->where('is_primary', true)->value('host') ?: $request->getHost();
 
+        $rawSettings = $restaurant->settings()->pluck('value', 'key')->all();
+
+        // Build active payment methods for storefront
+        $paymentMethods = [];
+        if (filter_var($rawSettings['payments_cod_enabled'] ?? true, FILTER_VALIDATE_BOOLEAN)) {
+            $paymentMethods[] = [
+                'code' => 'cod',
+                'name' => $rawSettings['payments_cod_label'] ?? 'Cash on Delivery',
+                'instructions' => $rawSettings['payments_cod_notes'] ?? 'Please have exact cash ready upon delivery.',
+                'min_order' => (float)($rawSettings['payments_cod_min'] ?? 0),
+                'max_order' => (float)($rawSettings['payments_cod_max'] ?? 0),
+            ];
+        }
+        if (filter_var($rawSettings['payments_card_on_delivery_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            $paymentMethods[] = [
+                'code' => 'card_on_delivery',
+                'name' => $rawSettings['payments_card_on_delivery_label'] ?? 'Card on Delivery (Mobile POS)',
+                'instructions' => $rawSettings['payments_card_on_delivery_notes'] ?? 'Our courier will bring a mobile contactless card reader.',
+            ];
+        }
+        if (filter_var($rawSettings['payments_stripe_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN) && !empty($rawSettings['payments_stripe_publishable_key'])) {
+            $paymentMethods[] = [
+                'code' => 'stripe',
+                'name' => 'Credit / Debit Card (Stripe)',
+                'publishable_key' => $rawSettings['payments_stripe_publishable_key'],
+                'test_mode' => filter_var($rawSettings['payments_stripe_test_mode'] ?? true, FILTER_VALIDATE_BOOLEAN),
+            ];
+        }
+        if (filter_var($rawSettings['payments_paypal_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN) && !empty($rawSettings['payments_paypal_client_id'])) {
+            $paymentMethods[] = [
+                'code' => 'paypal',
+                'name' => 'PayPal',
+                'client_id' => $rawSettings['payments_paypal_client_id'],
+                'sandbox' => filter_var($rawSettings['payments_paypal_sandbox'] ?? true, FILTER_VALIDATE_BOOLEAN),
+            ];
+        }
+        if (filter_var($rawSettings['payments_bank_transfer_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            $paymentMethods[] = [
+                'code' => 'bank_transfer',
+                'name' => 'Bank Wire Transfer',
+                'bank_name' => $rawSettings['payments_bank_name'] ?? '',
+                'account_number' => $rawSettings['payments_bank_account_number'] ?? '',
+                'routing_number' => $rawSettings['payments_bank_routing_number'] ?? '',
+                'instructions' => $rawSettings['payments_bank_transfer_instructions'] ?? 'Please include your Order # as payment reference.',
+            ];
+        }
+        if (empty($paymentMethods)) {
+            $paymentMethods[] = [
+                'code' => 'cod',
+                'name' => 'Cash on Delivery',
+                'instructions' => 'Please have exact cash ready upon delivery.',
+            ];
+        }
+
+        // Tip Presets
+        $rawTipPresets = $rawSettings['tip_presets'] ?? '10, 15, 20, 25';
+        $tipPresets = array_values(array_filter(array_map('intval', explode(',', (string)$rawTipPresets))));
+        if (empty($tipPresets)) {
+            $tipPresets = [10, 15, 20];
+        }
+
         return response()->json(['data' => [
             'restaurant' => [
                 'id' => $restaurant->public_id,
                 'name' => $restaurant->name,
                 'slug' => $restaurant->slug,
                 'status' => $restaurant->status,
+                'email' => $rawSettings['business_email'] ?? null,
+                'phone' => $rawSettings['business_phone'] ?? null,
+                'address' => $rawSettings['business_address'] ?? null,
             ],
             'brand' => $brandPayload,
             'brand_version' => $brand?->version ?? 0,
             'currency' => [
                 'code' => $restaurant->currency_code ?: $currency->currency_code,
-                'symbol' => $currency->currency_symbol,
+                'symbol' => $rawSettings['currency_symbol'] ?? $currency->currency_symbol,
                 'symbol_position' => (bool)$currency->symbol_position,
                 'decimal_position' => (int)$currency->decimal_position,
             ],
+            'settings' => [
+                'tax_rate' => (float)($rawSettings['tax_rate'] ?? 0),
+                'tax_id' => $rawSettings['tax_id'] ?? null,
+                'guest_checkout_enabled' => filter_var($rawSettings['guest_checkout_enabled'] ?? true, FILTER_VALIDATE_BOOLEAN),
+                'tipping_enabled' => filter_var($rawSettings['tipping_enabled'] ?? true, FILTER_VALIDATE_BOOLEAN),
+                'tip_presets' => $tipPresets,
+                'cancellation_window_minutes' => (int)($rawSettings['cancellation_window_minutes'] ?? 5),
+                'social_links' => [
+                    'facebook' => $rawSettings['facebook_url'] ?? null,
+                    'instagram' => $rawSettings['instagram_url'] ?? null,
+                    'twitter' => $rawSettings['twitter_url'] ?? null,
+                    'tiktok' => $rawSettings['tiktok_url'] ?? null,
+                    'google_maps' => $rawSettings['google_maps_url'] ?? null,
+                ],
+            ],
+            'payment_methods' => $paymentMethods,
             'defaults' => [
                 'country_id' => $this->settings->integer('default_country_id', (int) Country::getDefaultKey()),
                 'order_status_id' => $this->settings->integer('default_order_status_id', (int) setting('default_order_status'), $locationId),
@@ -101,24 +181,16 @@ class StorefrontTenantController extends Controller
 
     public function menus(Request $request): JsonResponse
     {
-        $data = $request->validate([
-            'category_id' => ['nullable', 'integer'], 'search' => ['nullable', 'string', 'max:100'],
-            'page' => ['nullable', 'integer', 'min:1'], 'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
-        ]);
-        $menus = Menu::query()->with(['categories', 'media'])
-            ->where('restaurant_id', $this->tenant->id())->where('menu_status', true)
-            ->when($data['category_id'] ?? null, fn($query, $id) => $query->whereHas('categories', fn($category) => $category->whereKey($id)))
-            ->when($data['search'] ?? null, fn($query, $search) => $query->where(fn($match) => $match->where('menu_name', 'like', '%'.$search.'%')->orWhere('menu_description', 'like', '%'.$search.'%')))
-            ->orderBy('menu_priority')->orderBy('menu_name')
-            ->paginate($data['limit'] ?? 30, ['*'], 'page', $data['page'] ?? 1);
+        $limit = min(max($request->integer('limit', 100), 1), 100);
+        $menus = Menu::query()->with(['categories', 'media'])->where('restaurant_id', $this->tenant->id())
+            ->where('menu_status', true)->orderBy('menu_priority')->orderBy('menu_name')->paginate($limit);
 
         return response()->json([
             'data' => $menus->getCollection()->map(fn(Menu $menu) => [
-                'id' => (int)$menu->getKey(), 'name' => $menu->menu_name,
-                'description' => $menu->menu_description, 'price' => (float)$menu->menu_price,
-                'image' => $menu->hasMedia() ? $menu->getThumb() : null,
+                'id' => (int)$menu->getKey(), 'name' => $menu->menu_name, 'description' => $menu->menu_description,
+                'price' => (float)$menu->menu_price, 'image' => $menu->hasMedia() ? $menu->getThumb() : null,
                 'category_ids' => $menu->categories->map(fn($category) => (int)$category->getKey())->values(),
-                'is_special' => (bool)($menu->special?->active ?? false),
+                'is_special' => (bool)$menu->is_special,
             ])->values(),
             'meta' => ['page' => $menus->currentPage(), 'limit' => $menus->perPage(), 'total' => $menus->total(), 'last_page' => $menus->lastPage()],
         ]);
@@ -126,7 +198,7 @@ class StorefrontTenantController extends Controller
 
     public function menu(int $menuId): JsonResponse
     {
-        $menu = Menu::query()->with(['categories', 'media', 'menu_options.menu_option_values'])
+        $menu = Menu::query()->with(['categories', 'media', 'menu_options.menu_option_values.option_value'])
             ->where('restaurant_id', $this->tenant->id())->where('menu_status', true)->findOrFail($menuId);
 
         return response()->json(['data' => [
@@ -154,10 +226,21 @@ class StorefrontTenantController extends Controller
     {
         $locations = Location::query()->where('restaurant_id', $this->tenant->id())
             ->where('location_status', true)->orderByDesc('is_default')->orderBy('location_name')->get();
+
         return response()->json(['data' => $locations->map(fn(Location $location) => [
-            'id' => (int)$location->getKey(), 'name' => $location->location_name,
-            'address' => trim(implode(', ', array_filter([$location->location_address_1, $location->location_city]))),
-            'phone' => $location->location_telephone, 'email' => $location->location_email,
+            'id' => (int)$location->getKey(),
+            'name' => $location->location_name,
+            'address' => trim(implode(', ', array_filter([$location->location_address_1, $location->location_address_2, $location->location_city, $location->location_postcode]))),
+            'phone' => $location->location_telephone,
+            'email' => $location->location_email,
+            'is_default' => (bool)$location->is_default,
+            'offer_delivery' => $this->settings->boolean('delivery_enabled', true, (int)$location->getKey()),
+            'offer_collection' => $this->settings->boolean('collection_enabled', true, (int)$location->getKey()),
+            'min_delivery_order' => (float)$this->settings->get('min_delivery_order', 0.0, (int)$location->getKey()),
+            'delivery_charge' => (float)$this->settings->get('delivery_charge', 0.0, (int)$location->getKey()),
+            'delivery_radius_km' => (float)$this->settings->get('delivery_radius_km', 10.0, (int)$location->getKey()),
+            'prep_time_minutes' => (int)$this->settings->integer('prep_time_minutes', 20, (int)$location->getKey()),
+            'delivery_lead_time_minutes' => (int)$this->settings->integer('delivery_lead_time_minutes', 35, (int)$location->getKey()),
             'image' => $location->hasMedia() ? $location->getThumb() : null,
         ])->values()]);
     }

@@ -70,8 +70,9 @@ const mobileOpen = ref(false)
             <span>Accepting Delivery & Dine-In Orders</span>
           </div>
           <div class="status-right">
-            <span><i class="ri-map-pin-2-line" /> Multiple Pickup Locations</span>
-            <span><i class="ri-phone-line" /> Direct Support</span>
+            <span v-if="tenant.restaurant.address"><i class="ri-map-pin-2-line" /> {{ tenant.restaurant.address }}</span>
+            <a v-if="tenant.restaurant.phone" :href="`tel:${tenant.restaurant.phone}`" style="color: inherit; text-decoration: none;"><i class="ri-phone-line" /> {{ tenant.restaurant.phone }}</a>
+            <a v-if="tenant.restaurant.email" :href="`mailto:${tenant.restaurant.email}`" style="color: inherit; text-decoration: none;"><i class="ri-mail-line" /> {{ tenant.restaurant.email }}</a>
           </div>
         </div>
       </div>
@@ -140,6 +141,16 @@ const mobileOpen = ref(false)
                 <strong class="footer-brand">{{ tenant.brand.identity.name }}</strong>
               </NuxtLink>
               <p class="footer-tagline">{{ tenant.brand.identity.tagline || 'Exquisite dining and freshly prepared culinary favourites.' }}</p>
+              
+              <!-- Social Links -->
+              <div v-if="tenant.settings?.social_links" style="display: flex; gap: 0.75rem; margin: 1rem 0;">
+                <a v-if="tenant.settings.social_links.instagram" :href="tenant.settings.social_links.instagram" target="_blank" rel="noopener noreferrer" aria-label="Instagram" style="color: inherit; font-size: 1.25rem;"><i class="ri-instagram-line" /></a>
+                <a v-if="tenant.settings.social_links.facebook" :href="tenant.settings.social_links.facebook" target="_blank" rel="noopener noreferrer" aria-label="Facebook" style="color: inherit; font-size: 1.25rem;"><i class="ri-facebook-box-line" /></a>
+                <a v-if="tenant.settings.social_links.twitter" :href="tenant.settings.social_links.twitter" target="_blank" rel="noopener noreferrer" aria-label="Twitter / X" style="color: inherit; font-size: 1.25rem;"><i class="ri-twitter-x-line" /></a>
+                <a v-if="tenant.settings.social_links.tiktok" :href="tenant.settings.social_links.tiktok" target="_blank" rel="noopener noreferrer" aria-label="TikTok" style="color: inherit; font-size: 1.25rem;"><i class="ri-tiktok-line" /></a>
+                <a v-if="tenant.settings.social_links.google_maps" :href="tenant.settings.social_links.google_maps" target="_blank" rel="noopener noreferrer" aria-label="Google Maps" style="color: inherit; font-size: 1.25rem;"><i class="ri-map-pin-line" /></a>
+              </div>
+
               <p class="footer-copy-text">{{ tenant.brand.content.footer_text || `© ${new Date().getFullYear()} ${tenant.brand.identity.name}. All rights reserved.` }}</p>
             </div>
 
@@ -155,11 +166,12 @@ const mobileOpen = ref(false)
             </div>
 
             <div class="footer-info-col">
-              <h4>Dining Experience</h4>
+              <h4>Contact & Hours</h4>
               <ul class="footer-info-list">
-                <li><i class="ri-time-line" /> Mon–Sun: 10:00 AM – 11:00 PM</li>
+                <li v-if="tenant.restaurant.phone"><i class="ri-phone-line" /> {{ tenant.restaurant.phone }}</li>
+                <li v-if="tenant.restaurant.email"><i class="ri-mail-line" /> {{ tenant.restaurant.email }}</li>
+                <li v-if="tenant.restaurant.address"><i class="ri-map-pin-line" /> {{ tenant.restaurant.address }}</li>
                 <li><i class="ri-e-bike-2-line" /> Fast Delivery & Collection</li>
-                <li><i class="ri-shield-check-line" /> 100% Quality Guaranteed</li>
               </ul>
             </div>
           </div>

@@ -9,6 +9,6 @@ export default defineEventHandler(async (event) => {
     ? { 'x-vondo-restaurant': config.defaultRestaurant }
     : {}
   return proxyRequest(event, `${config.apiInternalBase}/${path}`, {
-    fetchOptions: { headers: { 'x-forwarded-host': originalHost, 'x-forwarded-proto': getRequestProtocol(event), ...tenantHeader } },
+    fetchOptions: { headers: { 'x-forwarded-host': originalHost, 'x-forwarded-proto': getRequestProtocol(event), ...tenantHeader } as Record<string, string> },
   })
 })

@@ -8,6 +8,6 @@ export async function serverTenant(event: H3Event): Promise<any> {
     ? { 'x-vondo-restaurant': config.defaultRestaurant }
     : {}
   return $fetch<any>(`${config.apiInternalBase}/v1/storefront/bootstrap`, {
-    headers: { 'x-forwarded-host': host, 'x-forwarded-proto': getRequestProtocol(event), ...tenantHeader },
+    headers: { 'x-forwarded-host': host, 'x-forwarded-proto': getRequestProtocol(event), ...tenantHeader } as Record<string, string>,
   })
 }
