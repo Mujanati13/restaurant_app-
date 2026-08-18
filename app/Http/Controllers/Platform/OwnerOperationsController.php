@@ -74,18 +74,87 @@ class OwnerOperationsController extends Controller
     public function dashboard(Request $request): JsonResponse
     {
         $this->authorizeOwner($request, 'dashboard.view');
+        $tenantId = $this->tenant->id();
         $today = now()->toDateString();
-        $orders = Order::query()->where('restaurant_id', $this->tenant->id());
-        $reservations = Reservation::query()->where('restaurant_id', $this->tenant->id());
+
+        $ordersBase = Order::query()->where('restaurant_id', $tenantId);
+        $reservationsBase = Reservation::query()->where('restaurant_id', $tenantId);
+
+        $salesToday = (float)(clone $ordersBase)->whereDate('order_date', $today)->where('processed', true)->sum('order_total');
+        if ($salesToday === 0.0) {
+            $salesToday = (float)(clone $ordersBase)->whereDate('order_date', $today)->sum('order_total');
+        }
+        $ordersToday = (int)(clone $ordersBase)->whereDate('order_date', $today)->count();
+        $ordersWaiting = (int)(clone $ordersBase)->where('processed', false)->count();
+        $ordersTotal = (int)(clone $ordersBase)->count();
+        $totalRevenue = (float)(clone $ordersBase)->sum('order_total');
+
+        $reservationsToday = (int)(clone $reservationsBase)->whereDate('reserve_date', $today)->count();
+        $reservationsWaiting = (int)(clone $reservationsBase)->whereDate('reserve_date', '>=', $today)->count();
+
+        // 7-day sales breakdown
+        $days = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $dayDate = now()->subDays($i)->toDateString();
+            $dayName = now()->subDays($i)->format('D');
+            $daySales = (float)(clone $ordersBase)->whereDate('order_date', $dayDate)->sum('order_total');
+            $dayOrders = (int)(clone $ordersBase)->whereDate('order_date', $dayDate)->count();
+            $days[] = [
+                'date' => $dayDate,
+                'day' => $dayName,
+                'sales' => $daySales,
+                'orders' => $dayOrders,
+            ];
+        }
+
+        // Recent Orders
+        $recentOrders = (clone $ordersBase)->with(['status', 'location'])
+            ->latest('order_id')
+            ->limit(6)
+            ->get()
+            ->map(fn(Order $o) => [
+                'id' => (int)$o->getKey(),
+                'number' => '#'.(int)$o->getKey(),
+                'customer_name' => $o->customer_name ?: trim($o->first_name.' '.$o->last_name) ?: 'Guest',
+                'type' => $o->order_type_name ?? $o->order_type ?? 'Standard',
+                'status_name' => $o->status_name ?? $o->status?->status_name ?? 'New',
+                'status_color' => $o->status_color ?? $o->status?->status_color ?? '#746a62',
+                'total' => (float)$o->order_total,
+                'items_count' => (int)($o->total_items ?? 1),
+                'created_at' => $o->created_at?->toIso8601String(),
+            ])->values();
+
+        // Recent Reservations
+        $recentReservations = (clone $reservationsBase)->with(['status', 'location'])
+            ->latest('reservation_id')
+            ->limit(5)
+            ->get()
+            ->map(fn(Reservation $r) => [
+                'id' => (int)$r->getKey(),
+                'guest_name' => $r->customer_name ?: 'Guest',
+                'telephone' => $r->telephone,
+                'guests' => (int)$r->guest_num,
+                'date' => $r->reserve_date?->toDateString(),
+                'time' => (string)$r->reserve_time,
+                'status_name' => $r->status_name ?? $r->status?->status_name ?? 'New',
+                'status_color' => $r->status_color ?? $r->status?->status_color ?? '#746a62',
+                'created_at' => $r->created_at?->toIso8601String(),
+            ])->values();
 
         return response()->json(['data' => [
-            'sales_today' => (float)(clone $orders)->whereDate('order_date', $today)->where('processed', true)->sum('order_total'),
-            'orders_today' => (int)(clone $orders)->whereDate('order_date', $today)->count(),
-            'orders_waiting' => (int)(clone $orders)->where('processed', false)->count(),
-            'reservations_today' => (int)(clone $reservations)->whereDate('reserve_date', $today)->count(),
-            'customers' => (int)Customer::query()->where('restaurant_id', $this->tenant->id())->count(),
-            'menu_items' => (int)Menu::query()->where('restaurant_id', $this->tenant->id())->count(),
+            'sales_today' => $salesToday,
+            'orders_today' => $ordersToday,
+            'orders_waiting' => $ordersWaiting,
+            'orders_total' => $ordersTotal,
+            'total_revenue' => $totalRevenue,
+            'reservations_today' => $reservationsToday,
+            'reservations_waiting' => $reservationsWaiting,
+            'customers' => (int)Customer::query()->where('restaurant_id', $tenantId)->count(),
+            'menu_items' => (int)Menu::query()->where('restaurant_id', $tenantId)->count(),
             'active_locations' => (int)$this->locationQuery()->where('location_status', true)->count(),
+            'sales_trend' => $days,
+            'recent_orders' => $recentOrders,
+            'recent_reservations' => $recentReservations,
         ]]);
     }
 

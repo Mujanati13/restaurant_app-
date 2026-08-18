@@ -1067,72 +1067,7 @@ function ViewContent({
   // Owner Views
   if (mode === 'owner') {
     if (currentView === 'dashboard') {
-      const onboarding = ownerBootstrap?.onboarding || { checks: [] };
-      const completed = onboarding.checks.filter(c => c.complete).length;
-      const progressPercent = onboarding.checks.length ? Math.round((completed / onboarding.checks.length) * 100) : 0;
-
-      return h(Box, null,
-        h(Box, { sx: { mb: 3 } },
-          h(Typography, { variant: 'h4' }, 'Good service starts here'),
-          h(Typography, { variant: 'subtitle1' }, `Live operations for ${restaurant?.name || 'your restaurant'}.`)
-        ),
-        // Metrics Grid
-        h(Grid, { container: true, spacing: 2.5, sx: { mb: 3.5 } },
-          h(Grid, { item: true, xs: 12, sm: 6, md: 4, lg: 2 }, h(MetricCard, { label: 'Sales today', value: money(data?.sales_today, restaurant?.currency_code), icon: 'payments' })),
-          h(Grid, { item: true, xs: 12, sm: 6, md: 4, lg: 2 }, h(MetricCard, { label: 'Orders today', value: data?.orders_today ?? 0, icon: 'receipt' })),
-          h(Grid, { item: true, xs: 12, sm: 6, md: 4, lg: 2 }, h(MetricCard, { label: 'Waiting orders', value: data?.orders_waiting ?? 0, icon: 'schedule', color: 'warning.main' })),
-          h(Grid, { item: true, xs: 12, sm: 6, md: 4, lg: 2 }, h(MetricCard, { label: 'Reservations', value: data?.reservations_today ?? 0, icon: 'event_seat' })),
-          h(Grid, { item: true, xs: 12, sm: 6, md: 4, lg: 2 }, h(MetricCard, { label: 'Customers', value: data?.customers ?? 0, icon: 'group' })),
-          h(Grid, { item: true, xs: 12, sm: 6, md: 4, lg: 2 }, h(MetricCard, { label: 'Menu items', value: data?.menu_items ?? 0, icon: 'restaurant_menu' }))
-        ),
-        // Onboarding and Quick Actions
-        h(Grid, { container: true, spacing: 3 },
-          h(Grid, { item: true, xs: 12, md: 8 },
-            h(Card, null,
-              h(CardHeader, {
-                title: 'Getting ready',
-                subheader: `${completed} of ${onboarding.checks.length} setup tasks complete`,
-                action: h(Chip, { label: `${progressPercent}%`, color: 'primary', sx: { fontWeight: 700 } })
-              }),
-              h(CardContent, null,
-                h(LinearProgress, { variant: 'determinate', value: progressPercent, sx: { height: 8, borderRadius: 4, mb: 3 } }),
-                h(Grid, { container: true, spacing: 1.5 },
-                  onboarding.checks.map((chk, idx) =>
-                    h(Grid, { item: true, xs: 12, sm: 6, key: idx },
-                      h(Paper, {
-                        variant: 'outlined',
-                        sx: {
-                          p: 1.5,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 1.5,
-                          bgcolor: chk.complete ? '#f0f8f4' : 'transparent',
-                          borderColor: chk.complete ? '#cce4d9' : 'divider'
-                        }
-                      },
-                        h(Icon, { name: chk.complete ? 'check_circle' : 'radio_button_unchecked', color: chk.complete ? '#2e7d32' : '#746a62' }),
-                        h(Typography, { variant: 'body2', fontWeight: 600, color: chk.complete ? 'success.dark' : 'text.primary' }, chk.label)
-                      )
-                    )
-                  )
-                )
-              )
-            )
-          ),
-          h(Grid, { item: true, xs: 12, md: 4 },
-            h(Card, null,
-              h(CardHeader, { title: 'Quick actions' }),
-              h(CardContent, null,
-                h(Stack, { spacing: 1.5 },
-                  h(Button, { variant: 'contained', color: 'primary', fullWidth: true, onClick: () => setCurrentView('orders') }, 'Manage orders'),
-                  h(Button, { variant: 'outlined', color: 'secondary', fullWidth: true, onClick: () => setCurrentView('brand') }, 'Edit storefront'),
-                  h(Button, { variant: 'outlined', color: 'secondary', fullWidth: true, onClick: () => setCurrentView('team') }, 'Add team member')
-                )
-              )
-            )
-          )
-        )
-      );
+      return h(OwnerDashboardView, { data, ownerBootstrap, restaurant, request, notify, refreshView, setCurrentView });
     }
 
     if (currentView === 'orders') {
@@ -1933,6 +1868,287 @@ function VendorMenusView({ data, vendorLocationId, request, notify, refreshView 
 // ----------------------------------------------------
 // OWNER VIEW COMPONENTS
 // ----------------------------------------------------
+
+function OwnerDashboardView({ data, ownerBootstrap, restaurant, request, notify, refreshView, setCurrentView }) {
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const onboarding = ownerBootstrap?.onboarding || { checks: [] };
+  const completed = onboarding.checks.filter(c => c.complete).length;
+  const progressPercent = onboarding.checks.length ? Math.round((completed / onboarding.checks.length) * 100) : 0;
+
+  // Auto-refresh interval (15s)
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const timer = setInterval(() => {
+      refreshView();
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [autoRefresh, refreshView]);
+
+  const salesTrend = data?.sales_trend || [];
+  const maxSale = Math.max(...salesTrend.map(d => d.sales || 0), 1);
+  const recentOrders = data?.recent_orders || [];
+  const recentReservations = data?.recent_reservations || [];
+
+  return h(Box, null,
+    // Header & Actions
+    h(Box, { sx: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 } },
+      h(Box, null,
+        h(Typography, { variant: 'h4' }, 'Good service starts here'),
+        h(Typography, { variant: 'subtitle1' }, `Live operational overview for ${restaurant?.name || 'your restaurant'}.`)
+      ),
+      h(Stack, { direction: 'row', spacing: 1.5, alignItems: 'center' },
+        h(FormControlLabel, {
+          control: h(Switch, {
+            checked: autoRefresh,
+            onChange: (e) => setAutoRefresh(e.target.checked),
+            color: 'primary'
+          }),
+          label: h(Stack, { direction: 'row', spacing: 0.8, alignItems: 'center' },
+            autoRefresh && h(Box, {
+              sx: {
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                bgcolor: 'success.main',
+                animation: 'pulse 1.5s infinite',
+                '@keyframes pulse': {
+                  '0%': { transform: 'scale(0.95)', boxShadow: '0 0 0 0 rgba(46, 125, 50, 0.7)' },
+                  '70%': { transform: 'scale(1)', boxShadow: '0 0 0 6px rgba(46, 125, 50, 0)' },
+                  '100%': { transform: 'scale(0.95)', boxShadow: '0 0 0 0 rgba(46, 125, 50, 0)' }
+                }
+              }
+            }),
+            h(Typography, { variant: 'body2', fontWeight: 600 }, 'Live stream (15s)')
+          )
+        }),
+        h(Button, {
+          variant: 'contained',
+          color: 'primary',
+          onClick: () => setCurrentView('orders')
+        }, '📋 Live Orders'),
+        h(Button, {
+          variant: 'outlined',
+          color: 'secondary',
+          onClick: () => setCurrentView('menus')
+        }, '+ Menu Items')
+      )
+    ),
+
+    // Top Operational KPI Cards
+    h(Grid, { container: true, spacing: 2, sx: { mb: 3.5 } },
+      h(Grid, { item: true, xs: 12, sm: 6, md: 4, lg: 2 },
+        h(MetricCard, { label: 'Sales today', value: money(data?.sales_today, restaurant?.currency_code), icon: 'payments', color: 'success.main' })
+      ),
+      h(Grid, { item: true, xs: 12, sm: 6, md: 4, lg: 2 },
+        h(MetricCard, { label: 'Orders today', value: data?.orders_today ?? 0, icon: 'receipt_long', color: 'primary.main' })
+      ),
+      h(Grid, { item: true, xs: 12, sm: 6, md: 4, lg: 2 },
+        h(MetricCard, {
+          label: 'Waiting confirmation',
+          value: data?.orders_waiting ?? 0,
+          icon: 'pending_actions',
+          color: Number(data?.orders_waiting) > 0 ? 'error.main' : 'text.secondary'
+        })
+      ),
+      h(Grid, { item: true, xs: 12, sm: 6, md: 4, lg: 2 },
+        h(MetricCard, { label: 'Reservations today', value: data?.reservations_today ?? 0, icon: 'event_seat', color: 'secondary.main' })
+      ),
+      h(Grid, { item: true, xs: 12, sm: 6, md: 4, lg: 2 },
+        h(MetricCard, { label: 'Total Revenue', value: money(data?.total_revenue, restaurant?.currency_code), icon: 'paid' })
+      ),
+      h(Grid, { item: true, xs: 12, sm: 6, md: 4, lg: 2 },
+        h(MetricCard, { label: 'Customers', value: data?.customers ?? 0, icon: 'people' })
+      )
+    ),
+
+    // 7-Day Revenue & Volume Breakdown Card
+    salesTrend.length > 0 && h(Card, { sx: { mb: 3.5 } },
+      h(CardHeader, {
+        title: '7-Day Revenue & Order Trends',
+        subheader: 'Recent daily revenue performance and order frequency',
+        action: h(Typography, { variant: 'caption', color: 'text.secondary', fontWeight: 600 },
+          `Total 7d Orders: ${salesTrend.reduce((sum, d) => sum + d.orders, 0)}`
+        )
+      }),
+      h(CardContent, { sx: { pt: 0 } },
+        h(Grid, { container: true, spacing: 2, alignItems: 'flex-end', sx: { minHeight: 140, pt: 2 } },
+          salesTrend.map((day, idx) => {
+            const heightPercent = Math.max(Math.round(((day.sales || 0) / maxSale) * 100), 12);
+            return h(Grid, { item: true, xs: 12 / salesTrend.length, key: idx, sx: { textAlign: 'center' } },
+              h(Typography, { variant: 'caption', fontWeight: 700, color: 'text.secondary', display: 'block', mb: 0.5 },
+                money(day.sales, restaurant?.currency_code)
+              ),
+              h(Box, {
+                sx: {
+                  height: `${heightPercent}px`,
+                  maxHeight: 100,
+                  bgcolor: day.sales > 0 ? 'primary.main' : '#dfd7d0',
+                  borderRadius: 1.5,
+                  mx: 'auto',
+                  width: '75%',
+                  transition: 'height 0.3s ease',
+                  '&:hover': { bgcolor: 'primary.dark' }
+                }
+              }),
+              h(Typography, { variant: 'caption', fontWeight: 800, mt: 1, display: 'block' }, day.day),
+              h(Chip, { label: `${day.orders} ord`, size: 'small', sx: { height: 18, fontSize: '0.65rem', mt: 0.5 } })
+            );
+          })
+        )
+      )
+    ),
+
+    // Main 2-Column Dashboard Layout
+    h(Grid, { container: true, spacing: 3 },
+      // Left Column (Recent Activity & Onboarding)
+      h(Grid, { item: true, xs: 12, md: 8 },
+        h(Stack, { spacing: 3 },
+          // Recent Orders Card
+          h(Card, null,
+            h(CardHeader, {
+              title: 'Live Order Stream',
+              subheader: 'Most recent orders placed across your locations',
+              action: h(Button, { size: 'small', onClick: () => setCurrentView('orders') }, 'View all orders →')
+            }),
+            h(TableContainer, null,
+              h(Table, { size: 'small' },
+                h(TableHead, null,
+                  h(TableRow, null,
+                    h(TableCell, null, 'Order'),
+                    h(TableCell, null, 'Customer'),
+                    h(TableCell, null, 'Type'),
+                    h(TableCell, null, 'Status'),
+                    h(TableCell, null, 'Placed'),
+                    h(TableCell, { align: 'right' }, 'Total')
+                  )
+                ),
+                h(TableBody, null,
+                  recentOrders.length === 0
+                    ? h(TableRow, null, h(TableCell, { colSpan: 6, align: 'center', sx: { py: 3 } }, 'No orders received yet today.'))
+                    : recentOrders.map(o =>
+                        h(TableRow, {
+                          key: o.id,
+                          sx: { cursor: 'pointer', '&:hover': { bgcolor: '#fffaf6' } },
+                          onClick: () => setCurrentView('orders')
+                        },
+                          h(TableCell, null, h(Typography, { variant: 'body2', fontWeight: 800 }, o.number)),
+                          h(TableCell, null, h(Typography, { variant: 'body2', fontWeight: 600 }, o.customer_name)),
+                          h(TableCell, null, h(Chip, { label: o.type, size: 'small', variant: 'outlined' })),
+                          h(TableCell, null, h(Chip, { label: o.status_name, size: 'small', color: 'primary', sx: { fontWeight: 600 } })),
+                          h(TableCell, null, h(Typography, { variant: 'caption', color: 'text.secondary' }, date(o.created_at))),
+                          h(TableCell, { align: 'right' }, h(Typography, { variant: 'body2', fontWeight: 800 }, money(o.total, restaurant?.currency_code)))
+                        )
+                      )
+                )
+              )
+            )
+          ),
+
+          // Upcoming Table Reservations Card
+          h(Card, null,
+            h(CardHeader, {
+              title: 'Upcoming Dining Reservations',
+              subheader: 'Guests scheduled for dine-in tables',
+              action: h(Button, { size: 'small', onClick: () => setCurrentView('reservations') }, 'View all bookings →')
+            }),
+            h(CardContent, { sx: { pt: 0 } },
+              recentReservations.length === 0
+                ? h(Typography, { color: 'text.secondary', py: 2, textAlign: 'center' }, 'No reservations booked yet.')
+                : h(Stack, { spacing: 1.5 },
+                    recentReservations.map(r =>
+                      h(Paper, { key: r.id, variant: 'outlined', sx: { p: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+                        h(Box, null,
+                          h(Typography, { variant: 'body2', fontWeight: 700 }, r.guest_name),
+                          h(Typography, { variant: 'caption', color: 'text.secondary' }, `${r.date} at ${r.time} • ${r.guests} guests • ${r.telephone || 'No phone'}`)
+                        ),
+                        h(Chip, { label: r.status_name, size: 'small', color: 'default' })
+                      )
+                    )
+                  )
+            )
+          ),
+
+          // Onboarding Progress (if incomplete)
+          progressPercent < 100 && h(Card, null,
+            h(CardHeader, {
+              title: 'Getting Ready Checklist',
+              subheader: `${completed} of ${onboarding.checks.length} setup tasks completed`,
+              action: h(Chip, { label: `${progressPercent}%`, color: 'primary', sx: { fontWeight: 700 } })
+            }),
+            h(CardContent, null,
+              h(LinearProgress, { variant: 'determinate', value: progressPercent, sx: { height: 8, borderRadius: 4, mb: 3 } }),
+              h(Grid, { container: true, spacing: 1.5 },
+                onboarding.checks.map((chk, idx) =>
+                  h(Grid, { item: true, xs: 12, sm: 6, key: idx },
+                    h(Paper, {
+                      variant: 'outlined',
+                      sx: {
+                        p: 1.5,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1.5,
+                        bgcolor: chk.complete ? '#f0f8f4' : 'transparent',
+                        borderColor: chk.complete ? '#cce4d9' : 'divider'
+                      }
+                    },
+                      h(Icon, { name: chk.complete ? 'check_circle' : 'radio_button_unchecked', color: chk.complete ? '#2e7d32' : '#746a62' }),
+                      h(Typography, { variant: 'body2', fontWeight: 600, color: chk.complete ? 'success.dark' : 'text.primary' }, chk.label)
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      ),
+
+      // Right Column (Shortcuts & Health)
+      h(Grid, { item: true, xs: 12, md: 4 },
+        h(Stack, { spacing: 3 },
+          // Quick Shortcuts Card
+          h(Card, null,
+            h(CardHeader, { title: 'Quick Management Shortcuts' }),
+            h(CardContent, { sx: { pt: 0 } },
+              h(Stack, { spacing: 1.5 },
+                h(Button, { variant: 'contained', color: 'primary', fullWidth: true, onClick: () => setCurrentView('orders') }, '📋 Manage Orders'),
+                h(Button, { variant: 'outlined', color: 'secondary', fullWidth: true, onClick: () => setCurrentView('menus') }, '🍽️ Menu & Dishes'),
+                h(Button, { variant: 'outlined', color: 'secondary', fullWidth: true, onClick: () => setCurrentView('customers') }, '👥 Customer Directory'),
+                h(Button, { variant: 'outlined', color: 'secondary', fullWidth: true, onClick: () => setCurrentView('locations') }, '📍 Branches & Locations'),
+                h(Button, { variant: 'outlined', color: 'secondary', fullWidth: true, onClick: () => setCurrentView('brand') }, '🎨 Storefront & Brand'),
+                h(Button, { variant: 'outlined', color: 'secondary', fullWidth: true, onClick: () => setCurrentView('restaurant') }, '⚙️ Restaurant Settings')
+              )
+            )
+          ),
+
+          // Restaurant Status & Health Card
+          h(Card, null,
+            h(CardHeader, { title: 'System & Branch Health' }),
+            h(CardContent, null,
+              h(Stack, { spacing: 2 },
+                h(Box, { sx: { display: 'flex', justifyContent: 'space-between', pb: 1, borderBottom: '1px solid #eadfd4' } },
+                  h(Typography, { color: 'text.secondary' }, 'Operational Status'),
+                  h(Chip, { label: 'Online / Accepting', size: 'small', color: 'success', sx: { fontWeight: 700 } })
+                ),
+                h(Box, { sx: { display: 'flex', justifyContent: 'space-between', pb: 1, borderBottom: '1px solid #eadfd4' } },
+                  h(Typography, { color: 'text.secondary' }, 'Active Branches'),
+                  h(Typography, { fontWeight: 700 }, `${data?.active_locations || 1} location(s)`)
+                ),
+                h(Box, { sx: { display: 'flex', justifyContent: 'space-between', pb: 1, borderBottom: '1px solid #eadfd4' } },
+                  h(Typography, { color: 'text.secondary' }, 'Menu Items Catalog'),
+                  h(Typography, { fontWeight: 700 }, `${data?.menu_items || 0} active dishes`)
+                ),
+                h(Box, { sx: { display: 'flex', justifyContent: 'space-between' } },
+                  h(Typography, { color: 'text.secondary' }, 'Storefront Subdomain'),
+                  h(Typography, { fontWeight: 700, color: 'primary.main' }, `${restaurant?.slug || 'store'}.vondo.app`)
+                )
+              )
+            )
+          )
+        )
+      )
+    )
+  );
+}
 
 function OrdersView({ data, ownerBootstrap, restaurant, request, notify, refreshView }) {
   const [search, setSearch] = useState('');
