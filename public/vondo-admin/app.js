@@ -830,6 +830,7 @@ function App() {
                 h(ListItemButton, {
                   selected: currentView === item.key,
                   onClick: () => {
+                    setViewData(null);
                     setCurrentView(item.key);
                     if (item.key === 'restaurant-detail') setSelectedRestaurant(null);
                   },
@@ -870,6 +871,7 @@ function App() {
                 h(ListItemButton, {
                   selected: currentView === item.key,
                   onClick: () => {
+                    setViewData(null);
                     setCurrentView(item.key);
                     setMobileOpen(false);
                   },
@@ -3033,6 +3035,8 @@ function SubscriptionView({ subscription }) {
 }
 
 function BuildsView({ builds, request, notify, refreshView }) {
+  const buildList = Array.isArray(builds) ? builds : (Array.isArray(builds?.data) ? builds.data : []);
+
   const handleCreateBuild = async (e) => {
     e.preventDefault();
     const form = e.currentTarget;
@@ -3068,10 +3072,10 @@ function BuildsView({ builds, request, notify, refreshView }) {
         h(Card, null,
           h(CardHeader, { title: 'Build requests' }),
           h(CardContent, null,
-            builds.length === 0
+            buildList.length === 0
               ? h(Typography, { color: 'text.secondary', textAlign: 'center', py: 3 }, 'No app build requests yet.')
               : h(Stack, { spacing: 2 },
-                  builds.map(b =>
+                  buildList.map(b =>
                     h(Paper, { key: b.id, variant: 'outlined', sx: { p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 } },
                       h(Box, null,
                         h(Typography, { variant: 'subtitle1', fontWeight: 700 }, `${b.configuration?.app_name || 'App'} • ${b.platform}`),
@@ -3927,6 +3931,8 @@ function PlatformAuditView({ data }) {
 }
 
 function PlatformPlansView({ plans, request, notify, refreshView }) {
+  const planList = Array.isArray(plans) ? plans : (Array.isArray(plans?.data) ? plans.data : []);
+
   const handleCreatePlan = async (e) => {
     e.preventDefault();
     const form = e.currentTarget;
@@ -3955,7 +3961,7 @@ function PlatformPlansView({ plans, request, notify, refreshView }) {
           h(CardHeader, { title: 'Subscription plans' }),
           h(CardContent, null,
             h(Stack, { spacing: 2 },
-              plans.map(p =>
+              planList.map(p =>
                 h(Paper, { key: p.id, variant: 'outlined', sx: { p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
                   h(Box, null,
                     h(Typography, { variant: 'subtitle1', fontWeight: 700 }, p.name),
@@ -3992,6 +3998,7 @@ function PlatformPlansView({ plans, request, notify, refreshView }) {
 
 function PlatformTemplatesView({ templates, request, notify, refreshView }) {
   const [editModal, setEditModal] = useState({ open: false, template: null });
+  const templateList = Array.isArray(templates) ? templates : (Array.isArray(templates?.data) ? templates.data : []);
 
   const handleCreateTemplate = async (e) => {
     e.preventDefault();
@@ -4021,7 +4028,7 @@ function PlatformTemplatesView({ templates, request, notify, refreshView }) {
           h(CardHeader, { title: 'Restaurant templates' }),
           h(CardContent, null,
             h(Stack, { spacing: 2 },
-              templates.map(t =>
+              templateList.map(t =>
                 h(Paper, { key: t.id, variant: 'outlined', sx: { p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
                   h(Box, null,
                     h(Typography, { variant: 'subtitle1', fontWeight: 700 }, t.name),
