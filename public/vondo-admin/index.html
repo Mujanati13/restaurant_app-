@@ -6,11 +6,29 @@
   <meta name="robots" content="noindex,nofollow">
   <title>Vondo Control Center</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%23b84f2e'/%3E%3Cpath d='M15 16h10l7 28 7-28h10L38 51H26z' fill='white'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="/vondo-admin/styles.css?v=20260812-3">
+  
+  <!-- Roboto Font and Material Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+
+  <!-- React 18 & ReactDOM 18 -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <!-- Emotion (Required by Material UI) -->
+  <script crossorigin src="https://unpkg.com/@emotion/react@11.11.4/dist/emotion-react.umd.min.js"></script>
+  <script crossorigin src="https://unpkg.com/@emotion/styled@11.11.5/dist/emotion-styled.umd.min.js"></script>
+
+  <!-- Material UI (MUI v5) -->
+  <script crossorigin src="https://unpkg.com/@mui/material@5.15.20/umd/material-ui.production.min.js"></script>
+
+  <!-- Application Styles -->
+  <link rel="stylesheet" href="/vondo-admin/styles.css?v=20260818-react-mui">
 </head>
 <body>
-  <div id="app" aria-live="polite"></div>
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="/vondo-admin/app.js?v=20260812-3"></script>
+  <div id="root"></div>
+  <script type="module" src="/vondo-admin/app.js?v=20260818-react-mui"></script>
 </body>
 </html>
