@@ -32,7 +32,10 @@ class OwnerRegistrationController extends Controller
             ]);
             $restaurant = $provisioner->provision($data, $request->ip());
             $owner = $restaurant->memberships()->with('user')->where('role', 'owner')->firstOrFail()->user;
-            $security->sendVerification($restaurant, $owner);
+            $requireVerification = (bool) config('vondo.require_email_verification', false);
+            if ($requireVerification) {
+                $security->sendVerification($restaurant, $owner);
+            }
 
             return [['data' => [
                 'restaurant_id' => $restaurant->public_id,
@@ -40,7 +43,7 @@ class OwnerRegistrationController extends Controller
                 'slug' => $restaurant->slug,
                 'status' => $restaurant->status,
                 'storefront_url' => 'https://'.$restaurant->domains->first()->host,
-                'verification_required' => true,
+                'verification_required' => $requireVerification,
             ]], 201];
         });
     }

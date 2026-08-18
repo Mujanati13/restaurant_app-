@@ -32,7 +32,11 @@ class RestaurantProvisioner
                 'user_role_id' => $roleId,
                 'status' => true,
             ], true);
-            $user->forceFill(['is_activated' => false, 'activated_at' => null])->saveQuietly();
+            $requireVerification = (bool) config('vondo.require_email_verification', false);
+            $user->forceFill([
+                'is_activated' => !$requireVerification,
+                'activated_at' => !$requireVerification ? now() : null,
+            ])->saveQuietly();
 
             $restaurant = Restaurant::query()->create([
                 'name' => $data['restaurant_name'],

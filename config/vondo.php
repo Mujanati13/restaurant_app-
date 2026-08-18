@@ -3,6 +3,7 @@
 return [
     'base_domain' => env('VONDO_BASE_DOMAIN', parse_url((string)env('APP_URL', 'http://localhost'), PHP_URL_HOST) ?: 'localhost'),
     'default_restaurant_slug' => env('VONDO_DEFAULT_RESTAURANT', 'default'),
+    'require_email_verification' => (bool)env('VONDO_REQUIRE_EMAIL_VERIFICATION', false),
     'allow_tenant_header' => (bool)env('VONDO_ALLOW_TENANT_HEADER', false),
     'tenant_header' => 'X-Vondo-Restaurant',
     'access_token_minutes' => (int)env('VONDO_ACCESS_TOKEN_MINUTES', 60),

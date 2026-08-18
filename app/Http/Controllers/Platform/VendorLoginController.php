@@ -28,7 +28,9 @@ class VendorLoginController extends Controller
         if (!$user || !$auth->validateCredentials($user, $credentials)) {
             throw ValidationException::withMessages(['email' => ['The provided credentials are incorrect.']]);
         }
-        abort_unless($user->is_activated, 403, 'Verify your email address before signing in.');
+        if (config('vondo.require_email_verification', false)) {
+            abort_unless($user->is_activated, 403, 'Verify your email address before signing in.');
+        }
         $allowed = $user->isSuperUser() || RestaurantMembership::query()
             ->where('restaurant_id', $this->tenant->id())->where('user_id', $user->getKey())->where('status', 'active')->exists();
         abort_unless($allowed, 403, 'This staff account does not belong to this restaurant.');

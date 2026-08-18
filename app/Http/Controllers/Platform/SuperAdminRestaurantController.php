@@ -84,7 +84,9 @@ class SuperAdminRestaurantController extends Controller
         ]);
         $restaurant = $provisioner->provision($data, $request->ip());
         $owner = $restaurant->memberships()->with('user')->where('role', 'owner')->firstOrFail()->user;
-        $security->sendVerification($restaurant, $owner);
+        if (config('vondo.require_email_verification', false)) {
+            $security->sendVerification($restaurant, $owner);
+        }
         $this->audit($request, $user, $restaurant, 'restaurant.created_by_super_admin', ['owner_email' => strtolower($data['email'])]);
 
         return response()->json(['data' => $this->detailedData($restaurant)], 201);
