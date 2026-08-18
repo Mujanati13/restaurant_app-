@@ -102,6 +102,7 @@ class StorefrontCommerceController extends Controller
             'order_type' => ['required', Rule::in(['delivery', 'collection'])],
             'first_name' => ['required', 'string', 'between:1,48'], 'last_name' => ['required', 'string', 'between:1,48'],
             'telephone' => ['required', 'string', 'max:64'], 'comment' => ['nullable', 'string', 'max:500'],
+            'payment_method' => ['nullable', 'string', 'in:cod,card_on_delivery,stripe,paypal,bank_transfer'],
             'items' => ['required', 'array', 'between:1,100'], 'items.*.menu_id' => ['required', 'integer'],
             'items.*.quantity' => ['required', 'integer', 'between:1,50'], 'items.*.comment' => ['nullable', 'string', 'max:300'],
             'items.*.options' => ['nullable', 'array', 'max:50'],
@@ -134,7 +135,7 @@ class StorefrontCommerceController extends Controller
                 'customer_id' => $customer->getKey(), 'restaurant_id' => $this->tenant->id(), 'location_id' => $location->getKey(),
                 'first_name' => $data['first_name'], 'last_name' => $data['last_name'], 'email' => $customer->email,
                 'telephone' => $data['telephone'], 'order_type' => $data['order_type'], 'comment' => $data['comment'] ?? null,
-                'payment' => 'cod', 'status_id' => $this->settings->integer('default_order_status_id', (int) setting('default_order_status'), (int) $data['location_id']),
+                'payment' => $data['payment_method'] ?? 'cod', 'status_id' => $this->settings->integer('default_order_status_id', (int) setting('default_order_status'), (int) $data['location_id']),
                 'order_date' => now()->toDateString(), 'order_time' => now()->format('H:i'), 'order_time_is_asap' => true,
             ]);
             if ($data['order_type'] === 'delivery') {

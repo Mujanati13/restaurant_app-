@@ -137,6 +137,7 @@ const ownerNavItems = [
   { key: 'customers', label: 'Customers', icon: 'people' },
   { key: 'locations', label: 'Locations', icon: 'storefront' },
   { key: 'team', label: 'Team', icon: 'badge', endpoint: '/api/v1/owner/team' },
+  { key: 'payments', label: 'Payment settings', icon: 'payments' },
   { key: 'restaurant', label: 'Restaurant settings', icon: 'settings' },
   { key: 'brand', label: 'Brand & storefront', icon: 'palette' },
   { key: 'pages', label: 'Pages', icon: 'article' },
@@ -418,6 +419,9 @@ function App() {
           data = res.data;
         } else if (view === 'media') {
           const res = await request('/api/v1/owner/media');
+          data = res.data;
+        } else if (view === 'payments' || view === 'restaurant') {
+          const res = await request('/api/v1/owner/restaurant');
           data = res.data;
         }
       } else if (mode === 'vendor') {
@@ -1094,8 +1098,12 @@ function ViewContent({
       return h(TeamView, { data, ownerBootstrap, request, notify, refreshView });
     }
 
+    if (currentView === 'payments') {
+      return h(PaymentSettingsView, { restaurant: data || restaurant, request, notify, bootstrapSession, refreshView });
+    }
+
     if (currentView === 'restaurant') {
-      return h(RestaurantSettingsView, { restaurant, request, notify, bootstrapSession });
+      return h(RestaurantSettingsView, { restaurant, request, notify, bootstrapSession, refreshView, setCurrentView });
     }
 
     if (currentView === 'brand') {
@@ -4058,6 +4066,390 @@ function TeamView({ data, ownerBootstrap, request, notify, refreshView }) {
         h(DialogActions, null,
           h(Button, { onClick: () => setEditRoleModal({ open: false, role: null }) }, 'Cancel'),
           h(Button, { type: 'submit', variant: 'contained', color: 'primary' }, 'Save role')
+        )
+      )
+    )
+  );
+}
+
+function PaymentSettingsView({ restaurant, request, notify, bootstrapSession, refreshView }) {
+  const [saving, setSaving] = useState(false);
+  const [showStripeKey, setShowStripeKey] = useState(false);
+  const settings = restaurant?.settings || {};
+
+  const handleSavePayments = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+
+    const newSettings = {
+      ...settings,
+      // Cash on Delivery
+      payments_cod_enabled: formData.get('payments_cod_enabled') === 'on',
+      payments_cod_label: formData.get('payments_cod_label') || 'Cash on Delivery',
+      payments_cod_notes: formData.get('payments_cod_notes') || '',
+      payments_cod_min: formData.get('payments_cod_min') ? Number(formData.get('payments_cod_min')) : 0,
+      payments_cod_max: formData.get('payments_cod_max') ? Number(formData.get('payments_cod_max')) : 0,
+
+      // Card on Delivery (Mobile POS)
+      payments_card_on_delivery_enabled: formData.get('payments_card_on_delivery_enabled') === 'on',
+      payments_card_on_delivery_label: formData.get('payments_card_on_delivery_label') || 'Card on Delivery (Mobile POS)',
+      payments_card_on_delivery_notes: formData.get('payments_card_on_delivery_notes') || '',
+
+      // Stripe Online Card Processing
+      payments_stripe_enabled: formData.get('payments_stripe_enabled') === 'on',
+      payments_stripe_test_mode: formData.get('payments_stripe_test_mode') === 'on',
+      payments_stripe_publishable_key: formData.get('payments_stripe_publishable_key') || '',
+      payments_stripe_secret_key: formData.get('payments_stripe_secret_key') || '',
+      payments_stripe_webhook_secret: formData.get('payments_stripe_webhook_secret') || '',
+
+      // PayPal
+      payments_paypal_enabled: formData.get('payments_paypal_enabled') === 'on',
+      payments_paypal_sandbox: formData.get('payments_paypal_sandbox') === 'on',
+      payments_paypal_client_id: formData.get('payments_paypal_client_id') || '',
+      payments_paypal_secret: formData.get('payments_paypal_secret') || '',
+
+      // Direct Bank Transfer / Wire
+      payments_bank_transfer_enabled: formData.get('payments_bank_transfer_enabled') === 'on',
+      payments_bank_transfer_instructions: formData.get('payments_bank_transfer_instructions') || '',
+      payments_bank_name: formData.get('payments_bank_name') || '',
+      payments_bank_account_number: formData.get('payments_bank_account_number') || '',
+      payments_bank_routing_number: formData.get('payments_bank_routing_number') || '',
+    };
+
+    try {
+      await request('/api/v1/owner/restaurant', {
+        method: 'PATCH',
+        body: {
+          settings: newSettings
+        }
+      });
+      notify('Payment gateway settings saved.', 'success');
+      bootstrapSession();
+      if (refreshView) refreshView();
+    } catch (err) {
+      notify(err.message, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const isStripeActive = settings.payments_stripe_enabled;
+  const isCodActive = settings.payments_cod_enabled !== false;
+  const isCardOnDeliveryActive = settings.payments_card_on_delivery_enabled;
+  const isPaypalActive = settings.payments_paypal_enabled;
+  const isBankTransferActive = settings.payments_bank_transfer_enabled;
+
+  const activeGatewaysCount = [
+    isCodActive,
+    isCardOnDeliveryActive,
+    isStripeActive,
+    isPaypalActive,
+    isBankTransferActive
+  ].filter(Boolean).length;
+
+  return h(Box, null,
+    // Header
+    h(Box, { sx: { mb: 3 } },
+      h(Typography, { variant: 'h4' }, 'Payment Settings & Gateways'),
+      h(Typography, { variant: 'subtitle1' }, 'Manage online payment processors (Stripe, PayPal) and offline fulfillment methods (Cash, POS Card on Delivery).')
+    ),
+
+    // Gateway KPI Status Cards
+    h(Grid, { container: true, spacing: 2, sx: { mb: 3.5 } },
+      h(Grid, { item: true, xs: 12, sm: 6, md: 3 },
+        h(MetricCard, { label: 'Active Methods', value: `${activeGatewaysCount} enabled`, icon: 'account_balance_wallet', color: 'success.main' })
+      ),
+      h(Grid, { item: true, xs: 12, sm: 6, md: 3 },
+        h(MetricCard, {
+          label: 'Stripe Processing',
+          value: isStripeActive ? (settings.payments_stripe_test_mode ? 'Test Mode' : 'Live') : 'Disabled',
+          icon: 'credit_card',
+          color: isStripeActive ? 'primary.main' : 'text.disabled'
+        })
+      ),
+      h(Grid, { item: true, xs: 12, sm: 6, md: 3 },
+        h(MetricCard, {
+          label: 'Cash on Delivery',
+          value: isCodActive ? 'Active' : 'Disabled',
+          icon: 'payments',
+          color: isCodActive ? 'success.main' : 'text.disabled'
+        })
+      ),
+      h(Grid, { item: true, xs: 12, sm: 6, md: 3 },
+        h(MetricCard, { label: 'Settlement Currency', value: `${restaurant?.currency_code || 'USD'} (${settings.currency_symbol || '$'})`, icon: 'currency_exchange' })
+      )
+    ),
+
+    h('form', { onSubmit: handleSavePayments },
+      h(Stack, { spacing: 3 },
+        // 1. Stripe Online Checkout Card
+        h(Card, null,
+          h(CardHeader, {
+            title: 'Stripe Online Payments (Credit Cards, Apple Pay, Google Pay)',
+            subheader: 'Direct credit/debit card processing with 3D Secure and mobile wallet checkout',
+            action: h(FormControlLabel, {
+              control: h(Switch, { name: 'payments_stripe_enabled', defaultChecked: Boolean(settings.payments_stripe_enabled), color: 'primary' }),
+              label: h(Typography, { fontWeight: 700 }, settings.payments_stripe_enabled ? 'Enabled' : 'Disabled')
+            })
+          }),
+          h(CardContent, null,
+            h(Grid, { container: true, spacing: 2.5 },
+              h(Grid, { item: true, xs: 12 },
+                h(Stack, { direction: 'row', spacing: 1, flexWrap: 'wrap', gap: 1, mb: 1 },
+                  h(Chip, { label: '💳 Visa', size: 'small', variant: 'outlined' }),
+                  h(Chip, { label: '💳 Mastercard', size: 'small', variant: 'outlined' }),
+                  h(Chip, { label: '💳 Amex', size: 'small', variant: 'outlined' }),
+                  h(Chip, { label: ' Apple Pay', size: 'small', color: 'default', sx: { fontWeight: 700 } }),
+                  h(Chip, { label: 'G Pay', size: 'small', color: 'default', sx: { fontWeight: 700 } })
+                )
+              ),
+              h(Grid, { item: true, xs: 12, sm: 6 },
+                h(FormControlLabel, {
+                  control: h(Checkbox, { name: 'payments_stripe_test_mode', defaultChecked: settings.payments_stripe_test_mode !== false }),
+                  label: h(Box, null,
+                    h(Typography, { variant: 'body2', fontWeight: 600 }, 'Test / Sandbox Mode'),
+                    h(Typography, { variant: 'caption', color: 'text.secondary' }, 'Simulate card charges using test card numbers.')
+                  )
+                })
+              ),
+              h(Grid, { item: true, xs: 12 },
+                h(TextField, {
+                  label: 'Stripe Publishable Key',
+                  name: 'payments_stripe_publishable_key',
+                  defaultValue: settings.payments_stripe_publishable_key || '',
+                  placeholder: 'pk_live_... or pk_test_...',
+                  size: 'small',
+                  fullWidth: true,
+                  helperText: 'Found in your Stripe Dashboard under Developers > API keys'
+                })
+              ),
+              h(Grid, { item: true, xs: 12, sm: 8 },
+                h(TextField, {
+                  label: 'Stripe Secret Key',
+                  name: 'payments_stripe_secret_key',
+                  type: showStripeKey ? 'text' : 'password',
+                  defaultValue: settings.payments_stripe_secret_key || '',
+                  placeholder: 'sk_live_... or sk_test_...',
+                  size: 'small',
+                  fullWidth: true,
+                  helperText: 'Private backend secret key used to charge cards'
+                })
+              ),
+              h(Grid, { item: true, xs: 12, sm: 4, sx: { display: 'flex', alignItems: 'center' } },
+                h(Button, { size: 'small', variant: 'outlined', onClick: () => setShowStripeKey(!showStripeKey) },
+                  showStripeKey ? 'Hide Secret Key' : 'Show Secret Key'
+                )
+              ),
+              h(Grid, { item: true, xs: 12 },
+                h(TextField, {
+                  label: 'Stripe Webhook Secret (optional)',
+                  name: 'payments_stripe_webhook_secret',
+                  defaultValue: settings.payments_stripe_webhook_secret || '',
+                  placeholder: 'whsec_...',
+                  size: 'small',
+                  fullWidth: true,
+                  helperText: 'Used to verify instant payment webhooks'
+                })
+              )
+            )
+          )
+        ),
+
+        // 2. Cash on Delivery (COD) Card
+        h(Card, null,
+          h(CardHeader, {
+            title: 'Cash on Delivery / Pay on Arrival',
+            subheader: 'Customer pays in physical cash upon delivery or pickup arrival',
+            action: h(FormControlLabel, {
+              control: h(Switch, { name: 'payments_cod_enabled', defaultChecked: settings.payments_cod_enabled !== false, color: 'primary' }),
+              label: h(Typography, { fontWeight: 700 }, settings.payments_cod_enabled !== false ? 'Enabled' : 'Disabled')
+            })
+          }),
+          h(CardContent, null,
+            h(Grid, { container: true, spacing: 2 },
+              h(Grid, { item: true, xs: 12, sm: 6 },
+                h(TextField, {
+                  label: 'Checkout Display Label',
+                  name: 'payments_cod_label',
+                  defaultValue: settings.payments_cod_label || 'Cash on Delivery',
+                  size: 'small',
+                  fullWidth: true
+                })
+              ),
+              h(Grid, { item: true, xs: 12, sm: 3 },
+                h(TextField, {
+                  label: `Min Order (${restaurant?.currency_code || 'USD'})`,
+                  name: 'payments_cod_min',
+                  type: 'number',
+                  inputProps: { min: 0, step: '1' },
+                  defaultValue: settings.payments_cod_min || '',
+                  size: 'small',
+                  fullWidth: true
+                })
+              ),
+              h(Grid, { item: true, xs: 12, sm: 3 },
+                h(TextField, {
+                  label: `Max Order (${restaurant?.currency_code || 'USD'})`,
+                  name: 'payments_cod_max',
+                  type: 'number',
+                  inputProps: { min: 0, step: '1' },
+                  defaultValue: settings.payments_cod_max || '',
+                  size: 'small',
+                  fullWidth: true
+                })
+              ),
+              h(Grid, { item: true, xs: 12 },
+                h(TextField, {
+                  label: 'Customer Notice / Payment Instructions',
+                  name: 'payments_cod_notes',
+                  defaultValue: settings.payments_cod_notes || 'Please have exact cash ready upon delivery.',
+                  size: 'small',
+                  fullWidth: true
+                })
+              )
+            )
+          )
+        ),
+
+        // 3. Card on Delivery (Mobile POS) Card
+        h(Card, null,
+          h(CardHeader, {
+            title: 'Card on Delivery (Mobile Terminal)',
+            subheader: 'Driver or server brings a wireless POS machine for contactless card payment',
+            action: h(FormControlLabel, {
+              control: h(Switch, { name: 'payments_card_on_delivery_enabled', defaultChecked: Boolean(settings.payments_card_on_delivery_enabled), color: 'primary' }),
+              label: h(Typography, { fontWeight: 700 }, settings.payments_card_on_delivery_enabled ? 'Enabled' : 'Disabled')
+            })
+          }),
+          h(CardContent, null,
+            h(Grid, { container: true, spacing: 2 },
+              h(Grid, { item: true, xs: 12, sm: 6 },
+                h(TextField, {
+                  label: 'Checkout Display Label',
+                  name: 'payments_card_on_delivery_label',
+                  defaultValue: settings.payments_card_on_delivery_label || 'Card on Delivery (Mobile POS)',
+                  size: 'small',
+                  fullWidth: true
+                })
+              ),
+              h(Grid, { item: true, xs: 12, sm: 6 },
+                h(TextField, {
+                  label: 'Instructions',
+                  name: 'payments_card_on_delivery_notes',
+                  defaultValue: settings.payments_card_on_delivery_notes || 'Our delivery courier will bring a contactless card reader.',
+                  size: 'small',
+                  fullWidth: true
+                })
+              )
+            )
+          )
+        ),
+
+        // 4. PayPal Checkout Card
+        h(Card, null,
+          h(CardHeader, {
+            title: 'PayPal Checkout',
+            subheader: 'Accept payments via PayPal account balance, cards, and Pay Later',
+            action: h(FormControlLabel, {
+              control: h(Switch, { name: 'payments_paypal_enabled', defaultChecked: Boolean(settings.payments_paypal_enabled), color: 'primary' }),
+              label: h(Typography, { fontWeight: 700 }, settings.payments_paypal_enabled ? 'Enabled' : 'Disabled')
+            })
+          }),
+          h(CardContent, null,
+            h(Grid, { container: true, spacing: 2 },
+              h(Grid, { item: true, xs: 12 },
+                h(FormControlLabel, {
+                  control: h(Checkbox, { name: 'payments_paypal_sandbox', defaultChecked: Boolean(settings.payments_paypal_sandbox) }),
+                  label: 'PayPal Sandbox / Test Environment'
+                })
+              ),
+              h(Grid, { item: true, xs: 12, sm: 6 },
+                h(TextField, {
+                  label: 'PayPal Client ID',
+                  name: 'payments_paypal_client_id',
+                  defaultValue: settings.payments_paypal_client_id || '',
+                  size: 'small',
+                  fullWidth: true
+                })
+              ),
+              h(Grid, { item: true, xs: 12, sm: 6 },
+                h(TextField, {
+                  label: 'PayPal Secret',
+                  name: 'payments_paypal_secret',
+                  type: 'password',
+                  defaultValue: settings.payments_paypal_secret || '',
+                  size: 'small',
+                  fullWidth: true
+                })
+              )
+            )
+          )
+        ),
+
+        // 5. Direct Bank Transfer / Wire Card
+        h(Card, null,
+          h(CardHeader, {
+            title: 'Direct Bank Transfer / Wire',
+            subheader: 'Customer transfers funds directly into your restaurant business bank account',
+            action: h(FormControlLabel, {
+              control: h(Switch, { name: 'payments_bank_transfer_enabled', defaultChecked: Boolean(settings.payments_bank_transfer_enabled), color: 'primary' }),
+              label: h(Typography, { fontWeight: 700 }, settings.payments_bank_transfer_enabled ? 'Enabled' : 'Disabled')
+            })
+          }),
+          h(CardContent, null,
+            h(Grid, { container: true, spacing: 2 },
+              h(Grid, { item: true, xs: 12, sm: 4 },
+                h(TextField, {
+                  label: 'Bank Name',
+                  name: 'payments_bank_name',
+                  defaultValue: settings.payments_bank_name || '',
+                  size: 'small',
+                  fullWidth: true
+                })
+              ),
+              h(Grid, { item: true, xs: 12, sm: 4 },
+                h(TextField, {
+                  label: 'Account / IBAN Number',
+                  name: 'payments_bank_account_number',
+                  defaultValue: settings.payments_bank_account_number || '',
+                  size: 'small',
+                  fullWidth: true
+                })
+              ),
+              h(Grid, { item: true, xs: 12, sm: 4 },
+                h(TextField, {
+                  label: 'Routing / SWIFT Code',
+                  name: 'payments_bank_routing_number',
+                  defaultValue: settings.payments_bank_routing_number || '',
+                  size: 'small',
+                  fullWidth: true
+                })
+              ),
+              h(Grid, { item: true, xs: 12 },
+                h(TextField, {
+                  label: 'Payment Reference Instructions for Customers',
+                  name: 'payments_bank_transfer_instructions',
+                  defaultValue: settings.payments_bank_transfer_instructions || 'Please include your Order # as the payment reference.',
+                  size: 'small',
+                  fullWidth: true
+                })
+              )
+            )
+          )
+        ),
+
+        // Sticky Action Bar
+        h(Box, { sx: { display: 'flex', justifyContent: 'flex-end', pt: 1 } },
+          h(Button, {
+            type: 'submit',
+            variant: 'contained',
+            color: 'primary',
+            size: 'large',
+            disabled: saving,
+            sx: { px: 4 }
+          }, saving ? 'Saving payment gateways...' : 'Save Payment Settings')
         )
       )
     )
