@@ -165,6 +165,14 @@ const platformNavItems = [
   { key: 'security', label: 'Security', icon: 'security' },
 ];
 
+function getViewFromHash(currentMode) {
+  const hash = window.location.hash.replace(/^#\/?/, '').trim();
+  if (!hash) return null;
+  const validKeys = (currentMode === 'owner' ? ownerNavItems : currentMode === 'vendor' ? vendorNavItems : platformNavItems).map(i => i.key);
+  if (currentMode === 'platform') validKeys.push('restaurant-detail');
+  return validKeys.includes(hash) ? hash : null;
+}
+
 // Main React App Component
 function App() {
   const [mode, setMode] = useState(() => localStorage.getItem('vondo_admin_mode') || 'owner');
@@ -176,9 +184,30 @@ function App() {
   const [restaurantHint, setRestaurantHint] = useState(() => new URLSearchParams(window.location.search).get('restaurant'));
 
   const [currentView, setCurrentView] = useState(() => (
-    mode === 'owner' ? 'dashboard' : mode === 'vendor' ? 'vendor-dashboard' : 'overview'
+    getViewFromHash(mode) || (mode === 'owner' ? 'dashboard' : mode === 'vendor' ? 'vendor-dashboard' : 'overview')
   ));
   const [selectedRestaurant, setSelectedRestaurant] = useState(null);
+
+  // Synchronize active view with URL hash
+  useEffect(() => {
+    const targetHash = `#/${currentView}`;
+    if (window.location.hash !== targetHash) {
+      window.history.replaceState(null, '', targetHash);
+    }
+  }, [currentView]);
+
+  // Listen to browser Back / Forward and URL hash navigation
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hashView = getViewFromHash(mode);
+      if (hashView && hashView !== currentView) {
+        setViewData(null);
+        setCurrentView(hashView);
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [mode, currentView]);
 
   // Vendor Specific State
   const [vendorBootstrap, setVendorBootstrap] = useState(null);
@@ -464,7 +493,10 @@ function App() {
     clearSession(newMode);
     setMode(newMode);
     localStorage.setItem('vondo_admin_mode', newMode);
-    setCurrentView(newMode === 'owner' ? 'dashboard' : newMode === 'vendor' ? 'vendor-dashboard' : 'overview');
+    const defView = newMode === 'owner' ? 'dashboard' : newMode === 'vendor' ? 'vendor-dashboard' : 'overview';
+    setViewData(null);
+    setCurrentView(defView);
+    window.location.hash = `#/${defView}`;
   }, [clearSession]);
 
   const handleLogout = useCallback(async () => {
