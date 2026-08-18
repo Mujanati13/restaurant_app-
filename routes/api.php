@@ -164,6 +164,8 @@ Route::prefix('v1')->group(function (): void {
         Route::get('locations', [OwnerOperationsController::class, 'locations']);
         Route::post('locations', [OwnerOperationsController::class, 'createLocation']);
         Route::patch('locations/{locationId}', [OwnerOperationsController::class, 'updateLocation'])->whereNumber('locationId');
+        Route::post('locations/{locationId}/default', [OwnerOperationsController::class, 'setDefaultLocation'])->whereNumber('locationId');
+        Route::delete('locations/{locationId}', [OwnerOperationsController::class, 'deleteLocation'])->whereNumber('locationId');
         Route::get('locations/{locationId}/settings', [OwnerOperationsController::class, 'locationSettings'])->whereNumber('locationId');
         Route::put('locations/{locationId}/settings', [OwnerOperationsController::class, 'updateLocationSettings'])->whereNumber('locationId');
         Route::get('team', [OwnerOperationsController::class, 'team']);

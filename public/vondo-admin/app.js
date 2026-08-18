@@ -1120,7 +1120,7 @@ function ViewContent({
     }
 
     if (currentView === 'locations') {
-      return h(LocationsView, { data, request, notify, refreshView });
+      return h(LocationsView, { data, restaurant, request, notify, refreshView });
     }
 
     if (currentView === 'team') {
@@ -3110,7 +3110,7 @@ function CustomersView({ data, restaurant, request, notify, refreshView }) {
   );
 }
 
-function LocationsView({ data, request, notify, refreshView }) {
+function LocationsView({ data, restaurant, request, notify, refreshView }) {
   const locations = data || [];
   const [editModal, setEditModal] = useState({ open: false, location: null });
   const [servicesModal, setServicesModal] = useState({ open: false, location: null, settings: null });
@@ -3118,46 +3118,195 @@ function LocationsView({ data, request, notify, refreshView }) {
   const handleOpenServices = async (loc) => {
     try {
       const res = await request(`/api/v1/owner/locations/${loc.id}/settings`);
-      setServicesModal({ open: true, location: loc, settings: res.data });
+      setServicesModal({ open: true, location: loc, settings: res.data || {} });
     } catch (err) {
       notify(err.message, 'error');
     }
   };
 
+  const handleSetDefault = async (loc) => {
+    try {
+      await request(`/api/v1/owner/locations/${loc.id}/default`, { method: 'POST' });
+      notify(`"${loc.name}" set as the default location.`, 'success');
+      refreshView();
+    } catch (err) {
+      notify(err.message, 'error');
+    }
+  };
+
+  const handleToggleStatus = async (loc) => {
+    try {
+      await request(`/api/v1/owner/locations/${loc.id}`, {
+        method: 'PATCH',
+        body: {
+          location_name: loc.name,
+          location_email: loc.email,
+          location_status: !loc.is_active
+        }
+      });
+      notify(`Location ${!loc.is_active ? 'activated' : 'deactivated'}.`, 'success');
+      refreshView();
+    } catch (err) {
+      notify(err.message, 'error');
+    }
+  };
+
+  const handleDeleteLocation = async (loc) => {
+    if (loc.is_default) {
+      notify('Cannot delete the default location. Designate another location as default first.', 'warning');
+      return;
+    }
+    if (locations.length <= 1) {
+      notify('Cannot delete the only location. At least one location is required.', 'warning');
+      return;
+    }
+    if (!window.confirm(`Are you sure you want to delete branch "${loc.name}"?`)) return;
+    try {
+      await request(`/api/v1/owner/locations/${loc.id}`, { method: 'DELETE' });
+      notify('Location deleted.', 'success');
+      refreshView();
+    } catch (err) {
+      notify(err.message, 'error');
+    }
+  };
+
+  // KPI Calculations
+  const activeCount = locations.filter(l => l.is_active).length;
+  const defaultLoc = locations.find(l => l.is_default);
+  const totalOrders = locations.reduce((sum, l) => sum + (Number(l.orders_count) || 0), 0);
+
   return h(Box, null,
+    // Header
     h(Box, { sx: { mb: 3 } },
-      h(Typography, { variant: 'h4' }, 'Locations'),
-      h(Typography, { variant: 'subtitle1' }, 'Manage branches inside this restaurant tenant.')
+      h(Typography, { variant: 'h4' }, 'Restaurant Locations & Branches'),
+      h(Typography, { variant: 'subtitle1' }, 'Manage restaurant locations, delivery radiuses, fulfillment services, and prep times.')
     ),
+
+    // KPI Metrics Cards
+    h(Grid, { container: true, spacing: 2, sx: { mb: 3 } },
+      h(Grid, { item: true, xs: 12, sm: 6, md: 3 },
+        h(MetricCard, { label: 'Total Branches', value: locations.length, icon: 'storefront' })
+      ),
+      h(Grid, { item: true, xs: 12, sm: 6, md: 3 },
+        h(MetricCard, { label: 'Active Branches', value: activeCount, icon: 'check_circle', color: 'success.main' })
+      ),
+      h(Grid, { item: true, xs: 12, sm: 6, md: 3 },
+        h(MetricCard, { label: 'Default Branch', value: defaultLoc?.name || '—', icon: 'star', color: 'warning.main' })
+      ),
+      h(Grid, { item: true, xs: 12, sm: 6, md: 3 },
+        h(MetricCard, { label: 'Orders Tracked', value: totalOrders, icon: 'receipt_long', color: 'primary.main' })
+      )
+    ),
+
     h(Grid, { container: true, spacing: 3 },
       // Locations List
-      h(Grid, { item: true, xs: 12, md: 8 },
+      h(Grid, { item: true, xs: 12, md: 7 },
         h(Card, null,
-          h(CardHeader, { title: 'Restaurant locations', subheader: `${locations.length} configured locations` }),
+          h(CardHeader, {
+            title: 'Configured branches',
+            subheader: `${locations.length} branch location${locations.length === 1 ? '' : 's'} registered`
+          }),
           h(CardContent, null,
             h(Stack, { spacing: 2 },
-              locations.map(loc =>
-                h(Paper, { key: loc.id, variant: 'outlined', sx: { p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 } },
-                  h(Box, null,
-                    h(Typography, { variant: 'subtitle1', fontWeight: 700 }, loc.name),
-                    h(Typography, { variant: 'body2', color: 'text.secondary' }, [loc.address, loc.city, loc.postcode].filter(Boolean).join(', ') || 'Address not set'),
-                    h(Typography, { variant: 'caption', color: 'text.secondary' }, `${loc.email} • ${loc.telephone || 'No phone'}`)
+              locations.map(loc => {
+                const sett = loc.settings || {};
+                return h(Paper, { key: loc.id, variant: 'outlined', sx: { p: 2.5, bgcolor: loc.is_default ? '#fffdfb' : 'background.paper', borderColor: loc.is_default ? 'primary.light' : '#eadfd4' } },
+                  h(Box, { sx: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 1, mb: 1.5 } },
+                    h(Box, null,
+                      h(Stack, { direction: 'row', spacing: 1, alignItems: 'center' },
+                        h(Typography, { variant: 'h6', fontWeight: 800 }, loc.name),
+                        loc.is_default && h(Chip, { label: 'Default Flagship', size: 'small', color: 'warning', sx: { fontWeight: 700 } })
+                      ),
+                      h(Typography, { variant: 'body2', color: 'text.secondary', mt: 0.5 },
+                        [loc.address, loc.city, loc.postcode].filter(Boolean).join(', ') || 'No physical address set'
+                      ),
+                      h(Typography, { variant: 'caption', color: 'text.secondary', display: 'block', mt: 0.5 },
+                        `${loc.email || 'No email'} • ${loc.telephone || 'No phone'}`
+                      )
+                    ),
+                    h(Stack, { direction: 'row', spacing: 1, alignItems: 'center' },
+                      h(Chip, {
+                        label: loc.is_active ? 'Active / Open' : 'Disabled / Closed',
+                        size: 'small',
+                        color: loc.is_active ? 'success' : 'default',
+                        onClick: () => handleToggleStatus(loc),
+                        sx: { cursor: 'pointer', fontWeight: 600 }
+                      }),
+                      h(Chip, {
+                        label: `${loc.orders_count || 0} orders`,
+                        size: 'small',
+                        variant: 'outlined',
+                        color: Number(loc.orders_count) > 0 ? 'primary' : 'default'
+                      })
+                    )
                   ),
-                  h(Stack, { direction: 'row', spacing: 1, alignItems: 'center' },
-                    loc.is_default && h(Chip, { label: 'Default', size: 'small' }),
-                    h(Chip, { label: loc.is_active ? 'Active' : 'Disabled', size: 'small', color: loc.is_active ? 'success' : 'default' }),
-                    h(Button, { size: 'small', variant: 'outlined', onClick: () => setEditModal({ open: true, location: loc }) }, 'Edit')
+
+                  // Service Flags summary badges
+                  h(Stack, { direction: 'row', spacing: 1, flexWrap: 'wrap', gap: 0.5, mb: 2 },
+                    h(Chip, {
+                      label: sett.orders_enabled !== false ? 'Online Orders: ON' : 'Online Orders: OFF',
+                      size: 'small',
+                      variant: 'outlined',
+                      color: sett.orders_enabled !== false ? 'success' : 'default'
+                    }),
+                    h(Chip, {
+                      label: sett.delivery_enabled !== false ? 'Delivery: ON' : 'Delivery: OFF',
+                      size: 'small',
+                      variant: 'outlined',
+                      color: sett.delivery_enabled !== false ? 'info' : 'default'
+                    }),
+                    h(Chip, {
+                      label: sett.collection_enabled !== false ? 'Pickup: ON' : 'Pickup: OFF',
+                      size: 'small',
+                      variant: 'outlined',
+                      color: sett.collection_enabled !== false ? 'secondary' : 'default'
+                    }),
+                    h(Chip, {
+                      label: sett.reservations_enabled !== false ? 'Reservations: ON' : 'Reservations: OFF',
+                      size: 'small',
+                      variant: 'outlined',
+                      color: sett.reservations_enabled !== false ? 'primary' : 'default'
+                    })
+                  ),
+
+                  // Action Buttons
+                  h(Divider, { sx: { my: 1.5 } }),
+                  h(Stack, { direction: 'row', spacing: 1, justifyContent: 'flex-end', flexWrap: 'wrap', gap: 1 },
+                    !loc.is_default && h(Button, {
+                      size: 'small',
+                      variant: 'outlined',
+                      color: 'warning',
+                      onClick: () => handleSetDefault(loc)
+                    }, '⭐ Set as default'),
+                    h(Button, {
+                      size: 'small',
+                      variant: 'contained',
+                      color: 'secondary',
+                      onClick: () => handleOpenServices(loc)
+                    }, '⚙️ Services & Rules'),
+                    h(Button, {
+                      size: 'small',
+                      variant: 'outlined',
+                      onClick: () => setEditModal({ open: true, location: loc })
+                    }, 'Edit'),
+                    !loc.is_default && locations.length > 1 && h(IconButton, {
+                      size: 'small',
+                      color: 'error',
+                      title: 'Delete branch',
+                      onClick: () => handleDeleteLocation(loc)
+                    }, h(Icon, { name: 'delete' }))
                   )
-                )
-              )
+                );
+              })
             )
           )
         )
       ),
+
       // Add Location Form
-      h(Grid, { item: true, xs: 12, md: 4 },
+      h(Grid, { item: true, xs: 12, md: 5 },
         h(Card, null,
-          h(CardHeader, { title: 'Add location' }),
+          h(CardHeader, { title: 'Add new branch', subheader: 'Create a new physical or virtual restaurant branch.' }),
           h(CardContent, null,
             h('form', {
               onSubmit: async (e) => {
@@ -3167,7 +3316,7 @@ function LocationsView({ data, request, notify, refreshView }) {
                 body.location_status = form.location_status.checked;
                 try {
                   await request('/api/v1/owner/locations', { method: 'POST', body });
-                  notify('Location created.', 'success');
+                  notify('Branch location created.', 'success');
                   form.reset();
                   refreshView();
                 } catch (err) {
@@ -3176,14 +3325,20 @@ function LocationsView({ data, request, notify, refreshView }) {
               }
             },
               h(Stack, { spacing: 2 },
-                h(TextField, { label: 'Name', name: 'location_name', required: true, size: 'small', fullWidth: true }),
+                h(TextField, { label: 'Location Name', name: 'location_name', placeholder: 'e.g. Downtown Flagship', required: true, size: 'small', fullWidth: true }),
                 h(TextField, { label: 'Email', name: 'location_email', type: 'email', required: true, size: 'small', fullWidth: true }),
-                h(TextField, { label: 'Telephone', name: 'location_telephone', size: 'small', fullWidth: true }),
-                h(TextField, { label: 'Address', name: 'location_address_1', size: 'small', fullWidth: true }),
-                h(TextField, { label: 'City', name: 'location_city', size: 'small', fullWidth: true }),
-                h(TextField, { label: 'Postcode', name: 'location_postcode', size: 'small', fullWidth: true }),
-                h(FormControlLabel, { control: h(Checkbox, { name: 'location_status', defaultChecked: true }), label: 'Active location' }),
-                h(Button, { type: 'submit', variant: 'contained', color: 'primary', fullWidth: true }, 'Add location')
+                h(TextField, { label: 'Telephone', name: 'location_telephone', placeholder: '+1 234 567 8900', size: 'small', fullWidth: true }),
+                h(TextField, { label: 'Street Address', name: 'location_address_1', placeholder: '123 Main Street', size: 'small', fullWidth: true }),
+                h(Grid, { container: true, spacing: 2 },
+                  h(Grid, { item: true, xs: 7 },
+                    h(TextField, { label: 'City', name: 'location_city', size: 'small', fullWidth: true })
+                  ),
+                  h(Grid, { item: true, xs: 5 },
+                    h(TextField, { label: 'Postcode', name: 'location_postcode', size: 'small', fullWidth: true })
+                  )
+                ),
+                h(FormControlLabel, { control: h(Checkbox, { name: 'location_status', defaultChecked: true }), label: 'Active and ready for operations' }),
+                h(Button, { type: 'submit', variant: 'contained', color: 'primary', fullWidth: true }, '+ Add branch location')
               )
             )
           )
@@ -3201,7 +3356,7 @@ function LocationsView({ data, request, notify, refreshView }) {
           body.location_status = form.location_status.checked;
           try {
             await request(`/api/v1/owner/locations/${editModal.location.id}`, { method: 'PATCH', body });
-            notify('Location updated.', 'success');
+            notify('Location profile updated.', 'success');
             setEditModal({ open: false, location: null });
             refreshView();
           } catch (err) {
@@ -3209,25 +3364,22 @@ function LocationsView({ data, request, notify, refreshView }) {
           }
         }
       },
-        h(DialogTitle, null, 'Edit Location'),
+        h(DialogTitle, null, `Edit Location: ${editModal.location?.name}`),
         h(DialogContent, null,
           h(Stack, { spacing: 2, mt: 1 },
-            h(TextField, { label: 'Name', name: 'location_name', defaultValue: editModal.location?.name || '', required: true, size: 'small', fullWidth: true }),
+            h(TextField, { label: 'Location Name', name: 'location_name', defaultValue: editModal.location?.name || '', required: true, size: 'small', fullWidth: true }),
             h(TextField, { label: 'Email', name: 'location_email', type: 'email', defaultValue: editModal.location?.email || '', required: true, size: 'small', fullWidth: true }),
             h(TextField, { label: 'Telephone', name: 'location_telephone', defaultValue: editModal.location?.telephone || '', size: 'small', fullWidth: true }),
             h(TextField, { label: 'Address', name: 'location_address_1', defaultValue: editModal.location?.address || '', size: 'small', fullWidth: true }),
-            h(TextField, { label: 'City', name: 'location_city', defaultValue: editModal.location?.city || '', size: 'small', fullWidth: true }),
-            h(TextField, { label: 'Postcode', name: 'location_postcode', defaultValue: editModal.location?.postcode || '', size: 'small', fullWidth: true }),
-            h(FormControlLabel, { control: h(Checkbox, { name: 'location_status', defaultChecked: !!editModal.location?.is_active }), label: 'Active location' }),
-            h(Button, {
-              variant: 'outlined',
-              color: 'secondary',
-              onClick: () => {
-                const loc = editModal.location;
-                setEditModal({ open: false, location: null });
-                handleOpenServices(loc);
-              }
-            }, 'Configure services')
+            h(Grid, { container: true, spacing: 2 },
+              h(Grid, { item: true, xs: 7 },
+                h(TextField, { label: 'City', name: 'location_city', defaultValue: editModal.location?.city || '', size: 'small', fullWidth: true })
+              ),
+              h(Grid, { item: true, xs: 5 },
+                h(TextField, { label: 'Postcode', name: 'location_postcode', defaultValue: editModal.location?.postcode || '', size: 'small', fullWidth: true })
+              )
+            ),
+            h(FormControlLabel, { control: h(Checkbox, { name: 'location_status', defaultChecked: !!editModal.location?.is_active }), label: 'Active location' })
           )
         ),
         h(DialogActions, null,
@@ -3237,8 +3389,8 @@ function LocationsView({ data, request, notify, refreshView }) {
       )
     ),
 
-    // Location Services Dialog
-    servicesModal.open && h(Dialog, { open: true, onClose: () => setServicesModal({ open: false, location: null, settings: null }), maxWidth: 'xs', fullWidth: true },
+    // Location Services & Delivery Rules Dialog
+    servicesModal.open && h(Dialog, { open: true, onClose: () => setServicesModal({ open: false, location: null, settings: null }), maxWidth: 'sm', fullWidth: true },
       h('form', {
         onSubmit: async (e) => {
           e.preventDefault();
@@ -3248,29 +3400,95 @@ function LocationsView({ data, request, notify, refreshView }) {
             collection_enabled: form.collection_enabled.checked,
             delivery_enabled: form.delivery_enabled.checked,
             reservations_enabled: form.reservations_enabled.checked,
+            min_delivery_order: form.min_delivery_order?.value ? Number(form.min_delivery_order.value) : 0,
+            delivery_charge: form.delivery_charge?.value ? Number(form.delivery_charge.value) : 0,
+            delivery_radius_km: form.delivery_radius_km?.value ? Number(form.delivery_radius_km.value) : 0,
+            prep_time_minutes: form.prep_time_minutes?.value ? Number(form.prep_time_minutes.value) : 15,
+            delivery_lead_time_minutes: form.delivery_lead_time_minutes?.value ? Number(form.delivery_lead_time_minutes.value) : 30,
           };
           try {
             await request(`/api/v1/owner/locations/${servicesModal.location.id}/settings`, { method: 'PUT', body });
-            notify('Location services saved.', 'success');
+            notify('Location services & operational rules saved.', 'success');
             setServicesModal({ open: false, location: null, settings: null });
+            refreshView();
           } catch (err) {
             notify(err.message, 'error');
           }
         }
       },
-        h(DialogTitle, null, `${servicesModal.location?.name} Services`),
-        h(DialogContent, null,
-          h(Typography, { variant: 'body2', color: 'text.secondary', mb: 2 }, 'Override service defaults for this specific location.'),
-          h(FormGroup, null,
-            h(FormControlLabel, { control: h(Checkbox, { name: 'orders_enabled', defaultChecked: servicesModal.settings?.orders_enabled !== false }), label: 'Online ordering' }),
-            h(FormControlLabel, { control: h(Checkbox, { name: 'collection_enabled', defaultChecked: servicesModal.settings?.collection_enabled !== false }), label: 'Collection / Pickup' }),
-            h(FormControlLabel, { control: h(Checkbox, { name: 'delivery_enabled', defaultChecked: servicesModal.settings?.delivery_enabled !== false }), label: 'Delivery' }),
-            h(FormControlLabel, { control: h(Checkbox, { name: 'reservations_enabled', defaultChecked: servicesModal.settings?.reservations_enabled !== false }), label: 'Table Reservations' })
+        h(DialogTitle, null, `${servicesModal.location?.name} — Services & Operational Rules`),
+        h(DialogContent, { dividers: true },
+          h(Typography, { variant: 'subtitle2', fontWeight: 700, mb: 1 }, 'Enabled Fulfillment Channels'),
+          h(FormGroup, { sx: { mb: 3 } },
+            h(FormControlLabel, { control: h(Checkbox, { name: 'orders_enabled', defaultChecked: servicesModal.settings?.orders_enabled !== false }), label: 'Online ordering system' }),
+            h(FormControlLabel, { control: h(Checkbox, { name: 'delivery_enabled', defaultChecked: servicesModal.settings?.delivery_enabled !== false }), label: 'Home Delivery' }),
+            h(FormControlLabel, { control: h(Checkbox, { name: 'collection_enabled', defaultChecked: servicesModal.settings?.collection_enabled !== false }), label: 'Pickup / Takeaway Collection' }),
+            h(FormControlLabel, { control: h(Checkbox, { name: 'reservations_enabled', defaultChecked: servicesModal.settings?.reservations_enabled !== false }), label: 'Dining Table Reservations' })
+          ),
+
+          h(Divider, { sx: { my: 2 } }),
+          h(Typography, { variant: 'subtitle2', fontWeight: 700, mb: 1.5 }, 'Delivery & Threshold Rules'),
+          h(Grid, { container: true, spacing: 2 },
+            h(Grid, { item: true, xs: 12, sm: 6 },
+              h(TextField, {
+                label: `Minimum Delivery Order (${restaurant?.currency_code || 'USD'})`,
+                name: 'min_delivery_order',
+                type: 'number',
+                inputProps: { min: 0, step: '0.50' },
+                defaultValue: servicesModal.settings?.min_delivery_order || '',
+                size: 'small',
+                fullWidth: true
+              })
+            ),
+            h(Grid, { item: true, xs: 12, sm: 6 },
+              h(TextField, {
+                label: `Standard Delivery Fee (${restaurant?.currency_code || 'USD'})`,
+                name: 'delivery_charge',
+                type: 'number',
+                inputProps: { min: 0, step: '0.50' },
+                defaultValue: servicesModal.settings?.delivery_charge || '',
+                size: 'small',
+                fullWidth: true
+              })
+            ),
+            h(Grid, { item: true, xs: 12, sm: 6 },
+              h(TextField, {
+                label: 'Delivery Radius (km)',
+                name: 'delivery_radius_km',
+                type: 'number',
+                inputProps: { min: 0, step: '1' },
+                defaultValue: servicesModal.settings?.delivery_radius_km || '',
+                size: 'small',
+                fullWidth: true
+              })
+            ),
+            h(Grid, { item: true, xs: 12, sm: 6 },
+              h(TextField, {
+                label: 'Delivery Transit Time (mins)',
+                name: 'delivery_lead_time_minutes',
+                type: 'number',
+                inputProps: { min: 0, step: '5' },
+                defaultValue: servicesModal.settings?.delivery_lead_time_minutes || '30',
+                size: 'small',
+                fullWidth: true
+              })
+            ),
+            h(Grid, { item: true, xs: 12, sm: 6 },
+              h(TextField, {
+                label: 'Kitchen Food Prep Time (mins)',
+                name: 'prep_time_minutes',
+                type: 'number',
+                inputProps: { min: 0, step: '5' },
+                defaultValue: servicesModal.settings?.prep_time_minutes || '15',
+                size: 'small',
+                fullWidth: true
+              })
+            )
           )
         ),
         h(DialogActions, null,
           h(Button, { onClick: () => setServicesModal({ open: false, location: null, settings: null }) }, 'Cancel'),
-          h(Button, { type: 'submit', variant: 'contained', color: 'primary' }, 'Save services')
+          h(Button, { type: 'submit', variant: 'contained', color: 'primary' }, 'Save operational rules')
         )
       )
     )
@@ -3599,55 +3817,251 @@ function TeamView({ data, ownerBootstrap, request, notify, refreshView }) {
 }
 
 function RestaurantSettingsView({ restaurant, request, notify, bootstrapSession }) {
+  const [tab, setTab] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const settings = restaurant?.settings || {};
+
+  const handleSaveSettings = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+
+    const baseData = {
+      name: formData.get('name'),
+      timezone: formData.get('timezone'),
+      currency_code: formData.get('currency_code')?.toUpperCase(),
+    };
+
+    const newSettings = {
+      ...settings,
+      currency_symbol: formData.get('currency_symbol') || '$',
+      business_email: formData.get('business_email') || '',
+      business_phone: formData.get('business_phone') || '',
+      business_address: formData.get('business_address') || '',
+      tax_id: formData.get('tax_id') || '',
+      tax_rate: formData.get('tax_rate') ? Number(formData.get('tax_rate')) : 0,
+      auto_accept_orders: formData.get('auto_accept_orders') === 'on',
+      guest_checkout_enabled: formData.get('guest_checkout_enabled') === 'on',
+      tipping_enabled: formData.get('tipping_enabled') === 'on',
+      tip_presets: formData.get('tip_presets') || '10, 15, 20, 25',
+      cancellation_window_minutes: formData.get('cancellation_window_minutes') ? Number(formData.get('cancellation_window_minutes')) : 5,
+      sound_alerts_enabled: formData.get('sound_alerts_enabled') === 'on',
+      notification_email: formData.get('notification_email') || '',
+      email_on_new_reservation: formData.get('email_on_new_reservation') === 'on',
+      facebook_url: formData.get('facebook_url') || '',
+      instagram_url: formData.get('instagram_url') || '',
+      twitter_url: formData.get('twitter_url') || '',
+      tiktok_url: formData.get('tiktok_url') || '',
+      google_maps_url: formData.get('google_maps_url') || '',
+    };
+
+    try {
+      await request('/api/v1/owner/restaurant', {
+        method: 'PATCH',
+        body: {
+          ...baseData,
+          settings: newSettings
+        }
+      });
+      notify('Restaurant settings successfully saved.', 'success');
+      bootstrapSession();
+    } catch (err) {
+      notify(err.message, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return h(Box, null,
     h(Box, { sx: { mb: 3 } },
-      h(Typography, { variant: 'h4' }, 'Restaurant settings'),
-      h(Typography, { variant: 'subtitle1' }, 'Core identity and regional configuration.')
+      h(Typography, { variant: 'h4' }, 'Restaurant Settings'),
+      h(Typography, { variant: 'subtitle1' }, 'Configure restaurant identity, checkout policies, staff notifications, and regional settings.')
     ),
-    h(Grid, { container: true, spacing: 3 },
-      h(Grid, { item: true, xs: 12, md: 8 },
-        h(Card, null,
-          h(CardHeader, { title: 'Restaurant profile' }),
-          h(CardContent, null,
-            h('form', {
-              onSubmit: async (e) => {
-                e.preventDefault();
-                const body = Object.fromEntries(new FormData(e.currentTarget));
-                try {
-                  await request('/api/v1/owner/restaurant', { method: 'PATCH', body });
-                  notify('Restaurant settings saved.', 'success');
-                  bootstrapSession();
-                } catch (err) {
-                  notify(err.message, 'error');
-                }
-              }
-            },
-              h(Stack, { spacing: 2.5 },
-                h(TextField, { label: 'Name', name: 'name', defaultValue: restaurant?.name || '', required: true, fullWidth: true, size: 'small' }),
-                h(TextField, { label: 'Timezone', name: 'timezone', defaultValue: restaurant?.timezone || '', required: true, fullWidth: true, size: 'small' }),
-                h(TextField, { label: 'Currency Code', name: 'currency_code', defaultValue: restaurant?.currency_code || '', required: true, fullWidth: true, size: 'small', inputProps: { minLength: 3, maxLength: 3 } }),
-                h(Button, { type: 'submit', variant: 'contained', color: 'primary', sx: { alignSelf: 'flex-start' } }, 'Save settings')
+
+    h('form', { onSubmit: handleSaveSettings },
+      h(Grid, { container: true, spacing: 3 },
+        // Main Settings Tabs & Panels
+        h(Grid, { item: true, xs: 12, md: 8 },
+          h(Card, null,
+            h(Box, { sx: { borderBottom: 1, borderColor: 'divider' } },
+              h(Tabs, { value: tab, onChange: (_, v) => setTab(v), variant: 'scrollable', scrollButtons: 'auto' },
+                h(Tab, { label: 'General & Regional' }),
+                h(Tab, { label: 'Order Policies & Checkout' }),
+                h(Tab, { label: 'Alerts & Staff Notifications' }),
+                h(Tab, { label: 'Social & Web Links' })
+              )
+            ),
+            h(CardContent, { sx: { p: 3 } },
+              // Tab 0: General & Regional
+              tab === 0 && h(Stack, { spacing: 2.5 },
+                h(Typography, { variant: 'subtitle2', fontWeight: 700, color: 'text.secondary' }, 'CORE IDENTITY & LOCALIZATION'),
+                h(Grid, { container: true, spacing: 2 },
+                  h(Grid, { item: true, xs: 12, sm: 8 },
+                    h(TextField, { label: 'Restaurant Name', name: 'name', defaultValue: restaurant?.name || '', required: true, size: 'small', fullWidth: true })
+                  ),
+                  h(Grid, { item: true, xs: 12, sm: 4 },
+                    h(TextField, { label: 'Store Slug / Subdomain', value: restaurant?.slug || '', disabled: true, size: 'small', fullWidth: true, helperText: 'Tenant subdomain' })
+                  ),
+                  h(Grid, { item: true, xs: 12, sm: 6 },
+                    h(TextField, { label: 'Currency Code', name: 'currency_code', defaultValue: restaurant?.currency_code || 'USD', required: true, size: 'small', fullWidth: true, inputProps: { minLength: 3, maxLength: 3 }, helperText: '3-letter ISO code e.g. USD, EUR, GBP' })
+                  ),
+                  h(Grid, { item: true, xs: 12, sm: 6 },
+                    h(TextField, { label: 'Currency Symbol', name: 'currency_symbol', defaultValue: settings.currency_symbol || '$', size: 'small', fullWidth: true, helperText: 'Display symbol e.g. $, €, £, ¥' })
+                  ),
+                  h(Grid, { item: true, xs: 12 },
+                    h(TextField, { label: 'Timezone', name: 'timezone', defaultValue: restaurant?.timezone || 'UTC', required: true, size: 'small', fullWidth: true, helperText: 'e.g. America/New_York, Europe/London, Asia/Dubai' })
+                  )
+                ),
+
+                h(Divider, { sx: { my: 1 } }),
+                h(Typography, { variant: 'subtitle2', fontWeight: 700, color: 'text.secondary' }, 'BUSINESS CONTACT & TAX INFORMATION'),
+                h(Grid, { container: true, spacing: 2 },
+                  h(Grid, { item: true, xs: 12, sm: 6 },
+                    h(TextField, { label: 'Official Business Email', name: 'business_email', type: 'email', defaultValue: settings.business_email || '', size: 'small', fullWidth: true })
+                  ),
+                  h(Grid, { item: true, xs: 12, sm: 6 },
+                    h(TextField, { label: 'Official Phone Number', name: 'business_phone', defaultValue: settings.business_phone || '', size: 'small', fullWidth: true })
+                  ),
+                  h(Grid, { item: true, xs: 12 },
+                    h(TextField, { label: 'Business / Legal Address', name: 'business_address', defaultValue: settings.business_address || '', size: 'small', fullWidth: true })
+                  ),
+                  h(Grid, { item: true, xs: 12, sm: 6 },
+                    h(TextField, { label: 'Tax / VAT Number', name: 'tax_id', defaultValue: settings.tax_id || '', size: 'small', fullWidth: true })
+                  ),
+                  h(Grid, { item: true, xs: 12, sm: 6 },
+                    h(TextField, { label: 'Default Tax Rate (%)', name: 'tax_rate', type: 'number', inputProps: { min: 0, step: '0.1' }, defaultValue: settings.tax_rate ?? 0, size: 'small', fullWidth: true, helperText: 'Applied to storefront checkouts' })
+                  )
+                )
+              ),
+
+              // Tab 1: Order Policies & Checkout
+              tab === 1 && h(Stack, { spacing: 2.5 },
+                h(Typography, { variant: 'subtitle2', fontWeight: 700, color: 'text.secondary' }, 'CHECKOUT & FULFILLMENT RULES'),
+                h(FormGroup, null,
+                  h(FormControlLabel, {
+                    control: h(Checkbox, { name: 'auto_accept_orders', defaultChecked: settings.auto_accept_orders !== false }),
+                    label: h(Box, null,
+                      h(Typography, { variant: 'body2', fontWeight: 600 }, 'Automatic Order Acceptance'),
+                      h(Typography, { variant: 'caption', color: 'text.secondary' }, 'Automatically mark incoming orders as accepted without manual staff triage.')
+                    )
+                  }),
+                  h(FormControlLabel, {
+                    control: h(Checkbox, { name: 'guest_checkout_enabled', defaultChecked: settings.guest_checkout_enabled !== false }),
+                    label: h(Box, null,
+                      h(Typography, { variant: 'body2', fontWeight: 600 }, 'Allow Guest Checkout'),
+                      h(Typography, { variant: 'caption', color: 'text.secondary' }, 'Permit customers to place food orders without creating a permanent account.')
+                    )
+                  }),
+                  h(FormControlLabel, {
+                    control: h(Checkbox, { name: 'tipping_enabled', defaultChecked: settings.tipping_enabled !== false }),
+                    label: h(Box, null,
+                      h(Typography, { variant: 'body2', fontWeight: 600 }, 'Enable Customer Tipping / Gratuity'),
+                      h(Typography, { variant: 'caption', color: 'text.secondary' }, 'Display tip option badges during storefront checkout.')
+                    )
+                  })
+                ),
+                h(Grid, { container: true, spacing: 2, mt: 1 },
+                  h(Grid, { item: true, xs: 12, sm: 6 },
+                    h(TextField, {
+                      label: 'Tip Presets (%)',
+                      name: 'tip_presets',
+                      defaultValue: settings.tip_presets || '10, 15, 20, 25',
+                      size: 'small',
+                      fullWidth: true,
+                      helperText: 'Comma separated percentages (e.g. 10, 15, 20)'
+                    })
+                  ),
+                  h(Grid, { item: true, xs: 12, sm: 6 },
+                    h(TextField, {
+                      label: 'Cancellation Window (minutes)',
+                      name: 'cancellation_window_minutes',
+                      type: 'number',
+                      inputProps: { min: 0, max: 60 },
+                      defaultValue: settings.cancellation_window_minutes ?? 5,
+                      size: 'small',
+                      fullWidth: true,
+                      helperText: 'Minutes customer can cancel before kitchen prep'
+                    })
+                  )
+                )
+              ),
+
+              // Tab 2: Alerts & Staff Notifications
+              tab === 2 && h(Stack, { spacing: 2.5 },
+                h(Typography, { variant: 'subtitle2', fontWeight: 700, color: 'text.secondary' }, 'KITCHEN & STAFF ALERTS'),
+                h(FormGroup, null,
+                  h(FormControlLabel, {
+                    control: h(Checkbox, { name: 'sound_alerts_enabled', defaultChecked: settings.sound_alerts_enabled !== false }),
+                    label: h(Box, null,
+                      h(Typography, { variant: 'body2', fontWeight: 600 }, 'Audio Chime Alerts'),
+                      h(Typography, { variant: 'caption', color: 'text.secondary' }, 'Play sound notifications in the admin dashboard when a new order arrives.')
+                    )
+                  }),
+                  h(FormControlLabel, {
+                    control: h(Checkbox, { name: 'email_on_new_reservation', defaultChecked: settings.email_on_new_reservation !== false }),
+                    label: h(Box, null,
+                      h(Typography, { variant: 'body2', fontWeight: 600 }, 'Email Alerts for Table Reservations'),
+                      h(Typography, { variant: 'caption', color: 'text.secondary' }, 'Send an email to staff when a guest books a table.')
+                    )
+                  })
+                ),
+                h(TextField, {
+                  label: 'Staff Notification Email',
+                  name: 'notification_email',
+                  type: 'email',
+                  defaultValue: settings.notification_email || '',
+                  placeholder: 'orders@yourrestaurant.com',
+                  size: 'small',
+                  fullWidth: true,
+                  helperText: 'Receive instant email digests for every new customer order.'
+                })
+              ),
+
+              // Tab 3: Social & Web Links
+              tab === 3 && h(Stack, { spacing: 2.5 },
+                h(Typography, { variant: 'subtitle2', fontWeight: 700, color: 'text.secondary' }, 'ONLINE PRESENCE & SOCIAL PROFILES'),
+                h(TextField, { label: 'Instagram Profile URL / Handle', name: 'instagram_url', defaultValue: settings.instagram_url || '', placeholder: 'https://instagram.com/yourrestaurant', size: 'small', fullWidth: true }),
+                h(TextField, { label: 'Facebook Page URL', name: 'facebook_url', defaultValue: settings.facebook_url || '', placeholder: 'https://facebook.com/yourrestaurant', size: 'small', fullWidth: true }),
+                h(TextField, { label: 'Twitter / X URL', name: 'twitter_url', defaultValue: settings.twitter_url || '', placeholder: 'https://x.com/yourrestaurant', size: 'small', fullWidth: true }),
+                h(TextField, { label: 'TikTok URL', name: 'tiktok_url', defaultValue: settings.tiktok_url || '', placeholder: 'https://tiktok.com/@yourrestaurant', size: 'small', fullWidth: true }),
+                h(TextField, { label: 'Google Business / Maps Link', name: 'google_maps_url', defaultValue: settings.google_maps_url || '', placeholder: 'https://maps.google.com/?cid=...', size: 'small', fullWidth: true })
+              )
+            ),
+            h(CardActions, { sx: { p: 3, pt: 0 } },
+              h(Button, { type: 'submit', variant: 'contained', color: 'primary', disabled: saving },
+                saving ? 'Saving changes...' : 'Save settings'
               )
             )
           )
-        )
-      ),
-      h(Grid, { item: true, xs: 12, md: 4 },
-        h(Card, null,
-          h(CardHeader, { title: 'Account details' }),
-          h(CardContent, null,
-            h(Stack, { spacing: 2 },
-              h(Box, { sx: { display: 'flex', justifyContent: 'space-between', pb: 1, borderBottom: '1px solid #eadfd4' } },
-                h(Typography, { color: 'text.secondary' }, 'Status'),
-                h(Chip, { label: restaurant?.status || 'active', size: 'small', color: 'success' })
-              ),
-              h(Box, { sx: { display: 'flex', justifyContent: 'space-between', pb: 1, borderBottom: '1px solid #eadfd4' } },
-                h(Typography, { color: 'text.secondary' }, 'Store code'),
-                h(Typography, { fontWeight: 700 }, restaurant?.slug || '—')
-              ),
-              h(Box, { sx: { display: 'flex', justifyContent: 'space-between' } },
-                h(Typography, { color: 'text.secondary' }, 'Team members'),
-                h(Typography, { fontWeight: 700 }, restaurant?.members?.length || 1)
+        ),
+
+        // Sidebar Overview Card
+        h(Grid, { item: true, xs: 12, md: 4 },
+          h(Card, null,
+            h(CardHeader, { title: 'Account Overview' }),
+            h(CardContent, null,
+              h(Stack, { spacing: 2 },
+                h(Box, { sx: { display: 'flex', justifyContent: 'space-between', pb: 1, borderBottom: '1px solid #eadfd4' } },
+                  h(Typography, { color: 'text.secondary' }, 'Tenant Status'),
+                  h(Chip, { label: restaurant?.status || 'active', size: 'small', color: 'success', sx: { fontWeight: 700 } })
+                ),
+                h(Box, { sx: { display: 'flex', justifyContent: 'space-between', pb: 1, borderBottom: '1px solid #eadfd4' } },
+                  h(Typography, { color: 'text.secondary' }, 'Store Subdomain'),
+                  h(Typography, { fontWeight: 700 }, `${restaurant?.slug || '—'}.vondo.app`)
+                ),
+                h(Box, { sx: { display: 'flex', justifyContent: 'space-between', pb: 1, borderBottom: '1px solid #eadfd4' } },
+                  h(Typography, { color: 'text.secondary' }, 'Active Domains'),
+                  h(Typography, { fontWeight: 700 }, restaurant?.domains?.length || 1)
+                ),
+                h(Box, { sx: { display: 'flex', justifyContent: 'space-between', pb: 1, borderBottom: '1px solid #eadfd4' } },
+                  h(Typography, { color: 'text.secondary' }, 'Team Members'),
+                  h(Typography, { fontWeight: 700 }, restaurant?.members?.length || 1)
+                ),
+                h(Box, { sx: { display: 'flex', justifyContent: 'space-between' } },
+                  h(Typography, { color: 'text.secondary' }, 'Public Tenant ID'),
+                  h(Typography, { variant: 'caption', fontFamily: 'monospace', fontWeight: 600 }, restaurant?.id?.slice(0, 13) + '...')
+                )
               )
             )
           )

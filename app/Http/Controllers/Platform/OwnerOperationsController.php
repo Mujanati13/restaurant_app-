@@ -465,6 +465,36 @@ class OwnerOperationsController extends Controller
         return response()->json(['data' => $this->locationData($location)]);
     }
 
+    public function setDefaultLocation(Request $request, int $locationId): JsonResponse
+    {
+        $this->authorizeOwner($request, 'locations.manage');
+        $location = $this->locationQuery()->findOrFail($locationId);
+
+        DB::transaction(function () use ($location): void {
+            $this->locationQuery()->update(['is_default' => false]);
+            $location->forceFill(['is_default' => true])->save();
+        });
+
+        $this->audit($request, 'location.set_default', 'location', $locationId, ['name' => $location->location_name]);
+
+        return response()->json(['data' => $this->locationData($location->fresh())]);
+    }
+
+    public function deleteLocation(Request $request, int $locationId): JsonResponse
+    {
+        $this->authorizeOwner($request, 'locations.manage');
+        $location = $this->locationQuery()->findOrFail($locationId);
+
+        abort_if($location->is_default, 409, 'The default restaurant location cannot be deleted. Designate another default location first.');
+        abort_if($this->locationQuery()->count() <= 1, 409, 'A restaurant must maintain at least one branch location.');
+
+        $name = $location->location_name;
+        $location->delete();
+        $this->audit($request, 'location.deleted', 'location', $locationId, ['name' => $name]);
+
+        return response()->json([], 204);
+    }
+
     public function locationSettings(Request $request, int $locationId): JsonResponse
     {
         $this->authorizeOwner($request, 'locations.manage');
@@ -480,8 +510,15 @@ class OwnerOperationsController extends Controller
         $this->authorizeOwner($request, 'locations.manage');
         $this->locationQuery()->findOrFail($locationId);
         $data = $request->validate([
-            'orders_enabled' => ['sometimes', 'boolean'], 'reservations_enabled' => ['sometimes', 'boolean'],
-            'collection_enabled' => ['sometimes', 'boolean'], 'delivery_enabled' => ['sometimes', 'boolean'],
+            'orders_enabled' => ['sometimes', 'boolean'],
+            'reservations_enabled' => ['sometimes', 'boolean'],
+            'collection_enabled' => ['sometimes', 'boolean'],
+            'delivery_enabled' => ['sometimes', 'boolean'],
+            'delivery_charge' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'min_delivery_order' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'delivery_radius_km' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'prep_time_minutes' => ['sometimes', 'nullable', 'integer', 'min:0'],
+            'delivery_lead_time_minutes' => ['sometimes', 'nullable', 'integer', 'min:0'],
             'default_order_status_id' => ['sometimes', 'integer', 'exists:statuses,status_id'],
             'default_reservation_status_id' => ['sometimes', 'integer', 'exists:statuses,status_id'],
         ]);
@@ -631,10 +668,23 @@ class OwnerOperationsController extends Controller
 
     private function locationData(Location $location): array
     {
+        $settings = RestaurantLocationSetting::query()->where('restaurant_id', $this->tenant->id())
+            ->where('location_id', $location->getKey())->get()->mapWithKeys(fn ($item) => [$item->key => $item->value]);
+
+        $ordersCount = Order::query()->where('restaurant_id', $this->tenant->id())->where('location_id', $location->getKey())->count();
+
         return [
-            'id' => (int)$location->getKey(), 'name' => $location->location_name, 'email' => $location->location_email,
-            'telephone' => $location->location_telephone, 'address' => $location->location_address_1, 'city' => $location->location_city,
-            'postcode' => $location->location_postcode, 'is_active' => (bool)$location->location_status, 'is_default' => (bool)$location->is_default,
+            'id' => (int)$location->getKey(),
+            'name' => $location->location_name,
+            'email' => $location->location_email,
+            'telephone' => $location->location_telephone,
+            'address' => $location->location_address_1,
+            'city' => $location->location_city,
+            'postcode' => $location->location_postcode,
+            'is_active' => (bool)$location->location_status,
+            'is_default' => (bool)$location->is_default,
+            'orders_count' => $ordersCount,
+            'settings' => $settings,
         ];
     }
 

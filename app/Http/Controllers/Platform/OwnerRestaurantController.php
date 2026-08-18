@@ -6,6 +6,7 @@ use App\Platform\Models\PlatformAuditLog;
 use App\Platform\Models\PlatformMediaAsset;
 use App\Platform\Models\RestaurantDomain;
 use App\Platform\Models\RestaurantMembership;
+use App\Platform\Models\RestaurantSetting;
 use App\Platform\Domains\DomainVerifier;
 use App\Jobs\ProvisionDomainTls;
 use App\Platform\Support\RestaurantAccess;
@@ -25,9 +26,12 @@ class OwnerRestaurantController extends Controller
     {
         $this->authorizeOwner($request, 'dashboard.view');
         $restaurant = $this->tenant->get();
+        $settings = $restaurant->settings()->get()->mapWithKeys(fn(RestaurantSetting $s) => [$s->key => $s->value]);
+
         return response()->json(['data' => [
             'id' => $restaurant->public_id, 'name' => $restaurant->name, 'slug' => $restaurant->slug,
             'status' => $restaurant->status, 'timezone' => $restaurant->timezone, 'currency_code' => $restaurant->currency_code,
+            'settings' => $settings,
             'domains' => $restaurant->domains()->orderByDesc('is_primary')->get()->map(fn($domain) => $this->domainData($domain))->values(),
             'members' => $restaurant->memberships()->orderBy('role')->get()->map(fn($member) => [
                 'id' => $member->getKey(), 'user_id' => $member->user_id, 'role' => $member->role, 'status' => $member->status,
@@ -43,11 +47,30 @@ class OwnerRestaurantController extends Controller
     {
         $this->authorizeOwner($request, 'settings.manage');
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:80'], 'timezone' => ['required', 'timezone'],
-            'currency_code' => ['required', 'string', 'size:3'],
+            'name' => ['sometimes', 'required', 'string', 'max:80'],
+            'timezone' => ['sometimes', 'required', 'timezone'],
+            'currency_code' => ['sometimes', 'required', 'string', 'size:3'],
+            'settings' => ['sometimes', 'array'],
         ]);
+
         $restaurant = $this->tenant->get();
-        $restaurant->update([...$data, 'currency_code' => strtoupper($data['currency_code'])]);
+        $baseUpdates = array_intersect_key($data, array_flip(['name', 'timezone']));
+        if (isset($data['currency_code'])) {
+            $baseUpdates['currency_code'] = strtoupper($data['currency_code']);
+        }
+        if (!empty($baseUpdates)) {
+            $restaurant->update($baseUpdates);
+        }
+
+        if (isset($data['settings']) && is_array($data['settings'])) {
+            foreach ($data['settings'] as $key => $val) {
+                RestaurantSetting::query()->updateOrCreate(
+                    ['restaurant_id' => $restaurant->getKey(), 'key' => $key],
+                    ['value' => $val]
+                );
+            }
+        }
+
         $this->audit($request, 'restaurant.settings_updated', ['fields' => array_keys($data)]);
         return $this->show($request);
     }
