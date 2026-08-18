@@ -1116,7 +1116,7 @@ function ViewContent({
     }
 
     if (currentView === 'customers') {
-      return h(CustomersView, { data, request, notify, refreshView });
+      return h(CustomersView, { data, restaurant, request, notify, refreshView });
     }
 
     if (currentView === 'locations') {
@@ -2662,56 +2662,450 @@ function MenusView({ data, ownerBootstrap, restaurant, request, notify, refreshV
   );
 }
 
-function CustomersView({ data }) {
+function CustomersView({ data, restaurant, request, notify, refreshView }) {
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [page, setPage] = useState(0);
+  const [createModal, setCreateModal] = useState(false);
+  const [editModal, setEditModal] = useState({ open: false, customer: null });
+  const [selectedCustomerId, setSelectedCustomerId] = useState(null);
+  const [customerDetail, setCustomerDetail] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
   const customers = data?.data || [];
-  const meta = data?.meta || { total: customers.length };
+  const meta = data?.meta || { total: customers.length, per_page: 25 };
+
+  const handleApplyFilters = () => {
+    setPage(0);
+    refreshView(1, { search, status: statusFilter });
+  };
+
+  const handleClearFilters = () => {
+    setSearch('');
+    setStatusFilter('');
+    setPage(0);
+    refreshView(1, {});
+  };
+
+  const handleOpenDetail = async (customerId) => {
+    setSelectedCustomerId(customerId);
+    setDetailLoading(true);
+    try {
+      const res = await request(`/api/v1/owner/customers/${customerId}`);
+      setCustomerDetail(res.data);
+    } catch (err) {
+      notify(err.message, 'error');
+      setSelectedCustomerId(null);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const handleCreateCustomer = async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const body = Object.fromEntries(new FormData(form));
+    body.status = form.status ? form.status.checked : true;
+    if (!body.password) delete body.password;
+    try {
+      await request('/api/v1/owner/customers', { method: 'POST', body });
+      notify('Customer account created.', 'success');
+      setCreateModal(false);
+      refreshView(page + 1, { search, status: statusFilter });
+    } catch (err) {
+      notify(err.message, 'error');
+    }
+  };
+
+  const handleUpdateCustomer = async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const body = Object.fromEntries(new FormData(form));
+    body.status = form.edit_status ? form.edit_status.checked : false;
+    delete body.edit_status;
+    if (!body.password) delete body.password;
+    try {
+      await request(`/api/v1/owner/customers/${editModal.customer.id}`, { method: 'PATCH', body });
+      notify('Customer profile updated.', 'success');
+      setEditModal({ open: false, customer: null });
+      if (selectedCustomerId === editModal.customer.id) {
+        handleOpenDetail(editModal.customer.id);
+      }
+      refreshView(page + 1, { search, status: statusFilter });
+    } catch (err) {
+      notify(err.message, 'error');
+    }
+  };
+
+  const handleToggleStatus = async (customer) => {
+    try {
+      await request(`/api/v1/owner/customers/${customer.id}`, {
+        method: 'PATCH',
+        body: { status: !customer.status }
+      });
+      notify(`Customer ${!customer.status ? 'activated' : 'deactivated'}.`, 'success');
+      refreshView(page + 1, { search, status: statusFilter });
+    } catch (err) {
+      notify(err.message, 'error');
+    }
+  };
+
+  const handleDeleteCustomer = async (customer) => {
+    if (!window.confirm(`Permanently delete customer "${customer.name || customer.email}"?`)) return;
+    try {
+      await request(`/api/v1/owner/customers/${customer.id}`, { method: 'DELETE' });
+      notify('Customer deleted.', 'success');
+      if (selectedCustomerId === customer.id) setSelectedCustomerId(null);
+      refreshView(page + 1, { search, status: statusFilter });
+    } catch (err) {
+      notify(err.message, 'error');
+    }
+  };
+
+  // KPI Calculations
+  const activeCount = customers.filter(c => c.status).length;
+  const repeatCount = customers.filter(c => Number(c.orders_count) > 1).length;
+  const totalSpend = customers.reduce((sum, c) => sum + (Number(c.total_spent) || 0), 0);
 
   return h(Box, null,
-    h(Box, { sx: { mb: 3 } },
-      h(Typography, { variant: 'h4' }, 'Customers'),
-      h(Typography, { variant: 'subtitle1' }, 'Tenant-scoped customer directory.')
+    // Header & Actions
+    h(Box, { sx: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 } },
+      h(Box, null,
+        h(Typography, { variant: 'h4' }, 'Customer Directory'),
+        h(Typography, { variant: 'subtitle1' }, 'Manage restaurant patrons, delivery addresses, and purchasing profiles.')
+      ),
+      h(Button, { variant: 'contained', color: 'primary', onClick: () => setCreateModal(true) }, '+ Add customer')
     ),
-    h(Card, { sx: { mb: 3 } },
-      h(CardContent, { sx: { p: 2, '&:last-child': { pb: 2 } } },
-        h(TextField, {
-          placeholder: 'Search customer name or email',
-          value: search,
-          onChange: (e) => setSearch(e.target.value),
-          size: 'small',
-          sx: { maxWidth: 360 }
-        })
+
+    // KPI Metrics Cards
+    h(Grid, { container: true, spacing: 2, sx: { mb: 3 } },
+      h(Grid, { item: true, xs: 12, sm: 6, md: 3 },
+        h(MetricCard, { label: 'Total Customers', value: meta.total || customers.length, icon: 'people' })
+      ),
+      h(Grid, { item: true, xs: 12, sm: 6, md: 3 },
+        h(MetricCard, { label: 'Active Accounts', value: activeCount, icon: 'verified_user', color: 'success.main' })
+      ),
+      h(Grid, { item: true, xs: 12, sm: 6, md: 3 },
+        h(MetricCard, { label: 'Repeat Customers', value: repeatCount, icon: 'loyalty', color: 'primary.main' })
+      ),
+      h(Grid, { item: true, xs: 12, sm: 6, md: 3 },
+        h(MetricCard, { label: 'Tracked Spend', value: money(totalSpend, restaurant?.currency_code), icon: 'paid', color: 'warning.main' })
       )
     ),
+
+    // Filter Bar
+    h(Card, { sx: { mb: 3 } },
+      h(CardContent, { sx: { p: 2, '&:last-child': { pb: 2 } } },
+        h(Grid, { container: true, spacing: 2, alignItems: 'center' },
+          h(Grid, { item: true, xs: 12, sm: 6 },
+            h(TextField, {
+              placeholder: 'Search customer name, email, or telephone',
+              value: search,
+              onChange: (e) => setSearch(e.target.value),
+              onKeyDown: (e) => e.key === 'Enter' && handleApplyFilters(),
+              size: 'small',
+              fullWidth: true
+            })
+          ),
+          h(Grid, { item: true, xs: 12, sm: 3 },
+            h(FormControl, { size: 'small', fullWidth: true },
+              h(InputLabel, null, 'Status'),
+              h(Select, { value: statusFilter, label: 'Status', onChange: (e) => setStatusFilter(e.target.value) },
+                h(MenuItem, { value: '' }, 'All statuses'),
+                h(MenuItem, { value: '1' }, 'Active only'),
+                h(MenuItem, { value: '0' }, 'Disabled only')
+              )
+            )
+          ),
+          h(Grid, { item: true, xs: 12, sm: 3 },
+            h(Stack, { direction: 'row', spacing: 1 },
+              h(Button, { variant: 'contained', color: 'primary', fullWidth: true, onClick: handleApplyFilters }, 'Filter'),
+              (search || statusFilter) && h(Button, { variant: 'outlined', color: 'secondary', onClick: handleClearFilters }, 'Clear')
+            )
+          )
+        )
+      )
+    ),
+
+    // Customers Table
     h(Card, null,
       h(TableContainer, null,
         h(Table, null,
           h(TableHead, null,
             h(TableRow, null,
               h(TableCell, null, 'Customer'),
-              h(TableCell, null, 'Email'),
-              h(TableCell, null, 'Telephone'),
+              h(TableCell, null, 'Contact Info'),
+              h(TableCell, null, 'Orders'),
+              h(TableCell, null, 'Total Spend'),
               h(TableCell, null, 'Status'),
-              h(TableCell, null, 'Joined')
+              h(TableCell, null, 'Member Since'),
+              h(TableCell, { align: 'right' }, 'Actions')
             )
           ),
           h(TableBody, null,
             customers.length === 0
-              ? h(TableRow, null, h(TableCell, { colSpan: 5, align: 'center', sx: { py: 4 } }, 'No customers found.'))
-              : customers.map(c =>
-                  h(TableRow, { key: c.id },
-                    h(TableCell, null, h(Typography, { variant: 'body2', fontWeight: 700 }, c.name)),
-                    h(TableCell, null, c.email),
-                    h(TableCell, null, c.telephone || '—'),
-                    h(TableCell, null,
-                      h(Chip, { label: c.status ? 'Active' : 'Disabled', size: 'small', color: c.status ? 'success' : 'default' })
-                    ),
-                    h(TableCell, null, date(c.created_at))
+              ? h(TableRow, null, h(TableCell, { colSpan: 7, align: 'center', sx: { py: 5 } },
+                  h(Box, { sx: { textAlign: 'center' } },
+                    h(Icon, { name: 'person_off', sx: { fontSize: 44, color: '#c5b8b0', mb: 1 } }),
+                    h(Typography, { color: 'text.secondary' }, 'No customers found matching these filters.')
                   )
-                )
+                ))
+              : customers.map(c => {
+                  const initials = (c.first_name?.[0] || c.name?.[0] || 'C').toUpperCase();
+                  return h(TableRow, { key: c.id, sx: { '&:hover': { bgcolor: '#fffaf6' } } },
+                    h(TableCell, null,
+                      h(Stack, { direction: 'row', spacing: 1.5, alignItems: 'center' },
+                        h(Avatar, { sx: { bgcolor: 'primary.light', color: 'primary.contrastText', width: 36, height: 36, fontWeight: 700, fontSize: '0.85rem' } }, initials),
+                        h(Box, null,
+                          h(Typography, { variant: 'body2', fontWeight: 700 }, c.name || `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Unnamed'),
+                          h(Typography, { variant: 'caption', color: 'text.secondary' }, `ID #${c.id}`)
+                        )
+                      )
+                    ),
+                    h(TableCell, null,
+                      h('a', { href: `mailto:${c.email}`, style: { textDecoration: 'none', color: '#27211d', fontWeight: 600, display: 'block', fontSize: '0.85rem' } }, c.email),
+                      c.telephone ? h('a', { href: `tel:${c.telephone}`, style: { textDecoration: 'none', color: '#746a62', fontSize: 12, display: 'block' } }, c.telephone) : h(Typography, { variant: 'caption', color: 'text.disabled' }, 'No phone')
+                    ),
+                    h(TableCell, null,
+                      h(Chip, {
+                        label: `${c.orders_count ?? 0} orders`,
+                        size: 'small',
+                        color: Number(c.orders_count) > 0 ? 'primary' : 'default',
+                        variant: Number(c.orders_count) > 0 ? 'filled' : 'outlined'
+                      })
+                    ),
+                    h(TableCell, null,
+                      h(Typography, { variant: 'body2', fontWeight: 800, color: Number(c.total_spent) > 0 ? 'success.dark' : 'text.secondary' },
+                        money(c.total_spent || 0, restaurant?.currency_code)
+                      )
+                    ),
+                    h(TableCell, null,
+                      h(Chip, {
+                        label: c.status ? 'Active' : 'Disabled',
+                        size: 'small',
+                        color: c.status ? 'success' : 'default',
+                        onClick: () => handleToggleStatus(c),
+                        sx: { cursor: 'pointer', fontWeight: 600 }
+                      })
+                    ),
+                    h(TableCell, null,
+                      h(Typography, { variant: 'body2' }, date(c.created_at))
+                    ),
+                    h(TableCell, { align: 'right' },
+                      h(Stack, { direction: 'row', spacing: 1, justifyContent: 'flex-end' },
+                        h(Button, { size: 'small', variant: 'contained', color: 'secondary', onClick: () => handleOpenDetail(c.id) }, 'Profile'),
+                        h(Button, { size: 'small', variant: 'outlined', onClick: () => setEditModal({ open: true, customer: c }) }, 'Edit'),
+                        h(IconButton, { size: 'small', color: 'error', title: 'Delete customer', onClick: () => handleDeleteCustomer(c) },
+                          h(Icon, { name: 'delete' })
+                        )
+                      )
+                    )
+                  );
+                })
           )
         )
+      ),
+      h(TablePagination, {
+        component: 'div',
+        count: meta.total || customers.length,
+        page: page,
+        rowsPerPage: 25,
+        rowsPerPageOptions: [25],
+        onPageChange: (_, newPage) => {
+          setPage(newPage);
+          refreshView(newPage + 1, { search, status: statusFilter });
+        }
+      })
+    ),
+
+    // Create Customer Modal
+    createModal && h(Dialog, { open: true, onClose: () => setCreateModal(false), maxWidth: 'sm', fullWidth: true },
+      h('form', { onSubmit: handleCreateCustomer },
+        h(DialogTitle, null, 'Add new customer'),
+        h(DialogContent, null,
+          h(Grid, { container: true, spacing: 2, mt: 0.5 },
+            h(Grid, { item: true, xs: 12, sm: 6 },
+              h(TextField, { label: 'First Name', name: 'first_name', required: true, size: 'small', fullWidth: true })
+            ),
+            h(Grid, { item: true, xs: 12, sm: 6 },
+              h(TextField, { label: 'Last Name', name: 'last_name', required: true, size: 'small', fullWidth: true })
+            ),
+            h(Grid, { item: true, xs: 12 },
+              h(TextField, { label: 'Email address', name: 'email', type: 'email', required: true, size: 'small', fullWidth: true })
+            ),
+            h(Grid, { item: true, xs: 12, sm: 6 },
+              h(TextField, { label: 'Telephone', name: 'telephone', placeholder: '+1 234 567 8900', size: 'small', fullWidth: true })
+            ),
+            h(Grid, { item: true, xs: 12, sm: 6 },
+              h(TextField, { label: 'Password (optional)', name: 'password', type: 'password', size: 'small', fullWidth: true, helperText: 'Min 6 characters' })
+            ),
+            h(Grid, { item: true, xs: 12 },
+              h(FormControlLabel, { control: h(Checkbox, { name: 'status', defaultChecked: true }), label: 'Active customer account' })
+            )
+          )
+        ),
+        h(DialogActions, null,
+          h(Button, { onClick: () => setCreateModal(false) }, 'Cancel'),
+          h(Button, { type: 'submit', variant: 'contained', color: 'primary' }, 'Create customer')
+        )
       )
+    ),
+
+    // Edit Customer Modal
+    editModal.open && h(Dialog, { open: true, onClose: () => setEditModal({ open: false, customer: null }), maxWidth: 'sm', fullWidth: true },
+      h('form', { onSubmit: handleUpdateCustomer },
+        h(DialogTitle, null, `Edit Customer: ${editModal.customer?.name}`),
+        h(DialogContent, null,
+          h(Grid, { container: true, spacing: 2, mt: 0.5 },
+            h(Grid, { item: true, xs: 12, sm: 6 },
+              h(TextField, { label: 'First Name', name: 'first_name', defaultValue: editModal.customer?.first_name || editModal.customer?.name?.split(' ')[0] || '', required: true, size: 'small', fullWidth: true })
+            ),
+            h(Grid, { item: true, xs: 12, sm: 6 },
+              h(TextField, { label: 'Last Name', name: 'last_name', defaultValue: editModal.customer?.last_name || editModal.customer?.name?.split(' ').slice(1).join(' ') || '', required: true, size: 'small', fullWidth: true })
+            ),
+            h(Grid, { item: true, xs: 12 },
+              h(TextField, { label: 'Email address', name: 'email', type: 'email', defaultValue: editModal.customer?.email || '', required: true, size: 'small', fullWidth: true })
+            ),
+            h(Grid, { item: true, xs: 12, sm: 6 },
+              h(TextField, { label: 'Telephone', name: 'telephone', defaultValue: editModal.customer?.telephone || '', size: 'small', fullWidth: true })
+            ),
+            h(Grid, { item: true, xs: 12, sm: 6 },
+              h(TextField, { label: 'New Password (optional)', name: 'password', type: 'password', size: 'small', fullWidth: true, helperText: 'Leave empty to keep unchanged' })
+            ),
+            h(Grid, { item: true, xs: 12 },
+              h(FormControlLabel, { control: h(Checkbox, { name: 'edit_status', defaultChecked: Boolean(editModal.customer?.status) }), label: 'Active customer account' })
+            )
+          )
+        ),
+        h(DialogActions, null,
+          h(Button, { onClick: () => setEditModal({ open: false, customer: null }) }, 'Cancel'),
+          h(Button, { type: 'submit', variant: 'contained', color: 'primary' }, 'Save changes')
+        )
+      )
+    ),
+
+    // 360° Customer Profile Modal
+    selectedCustomerId && h(Dialog, { open: true, onClose: () => { setSelectedCustomerId(null); setCustomerDetail(null); }, maxWidth: 'md', fullWidth: true },
+      detailLoading || !customerDetail
+        ? h(DialogContent, { sx: { py: 8, textAlign: 'center' } },
+            h(CircularProgress, { color: 'primary' }),
+            h(Typography, { color: 'text.secondary', mt: 2 }, 'Loading full customer profile...')
+          )
+        : h(Box, null,
+            h(DialogTitle, { sx: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 } },
+              h(Stack, { direction: 'row', spacing: 2, alignItems: 'center' },
+                h(Avatar, { sx: { bgcolor: 'primary.main', width: 48, height: 48, fontWeight: 800, fontSize: '1.1rem' } },
+                  (customerDetail.first_name?.[0] || customerDetail.name?.[0] || 'C').toUpperCase()
+                ),
+                h(Box, null,
+                  h(Typography, { variant: 'h5', fontWeight: 800 }, customerDetail.name),
+                  h(Typography, { variant: 'caption', color: 'text.secondary' }, `Member since ${date(customerDetail.created_at)} • ID #${customerDetail.id}`)
+                )
+              ),
+              h(Stack, { direction: 'row', spacing: 1 },
+                h(Chip, { label: customerDetail.status ? 'Active' : 'Disabled', color: customerDetail.status ? 'success' : 'default', sx: { fontWeight: 700 } }),
+                h(Button, { size: 'small', variant: 'outlined', onClick: () => setEditModal({ open: true, customer: customerDetail }) }, 'Edit profile')
+              )
+            ),
+            h(DialogContent, { dividers: true },
+              h(Grid, { container: true, spacing: 2.5 },
+                // Summary Metrics
+                h(Grid, { item: true, xs: 12, sm: 4 },
+                  h(Paper, { variant: 'outlined', sx: { p: 2, textAlign: 'center', bgcolor: '#fffaf6' } },
+                    h(Typography, { variant: 'caption', color: 'text.secondary', fontWeight: 700 }, 'TOTAL ORDERS'),
+                    h(Typography, { variant: 'h4', fontWeight: 800, color: 'primary.main', mt: 0.5 }, customerDetail.orders_count || 0)
+                  )
+                ),
+                h(Grid, { item: true, xs: 12, sm: 4 },
+                  h(Paper, { variant: 'outlined', sx: { p: 2, textAlign: 'center', bgcolor: '#fffaf6' } },
+                    h(Typography, { variant: 'caption', color: 'text.secondary', fontWeight: 700 }, 'LIFETIME SPEND'),
+                    h(Typography, { variant: 'h4', fontWeight: 800, color: 'success.dark', mt: 0.5 }, money(customerDetail.total_spent || 0, restaurant?.currency_code))
+                  )
+                ),
+                h(Grid, { item: true, xs: 12, sm: 4 },
+                  h(Paper, { variant: 'outlined', sx: { p: 2, textAlign: 'center', bgcolor: '#fffaf6' } },
+                    h(Typography, { variant: 'caption', color: 'text.secondary', fontWeight: 700 }, 'AVG ORDER VALUE'),
+                    h(Typography, { variant: 'h4', fontWeight: 800, color: '#27211d', mt: 0.5 },
+                      money(customerDetail.orders_count ? (customerDetail.total_spent / customerDetail.orders_count) : 0, restaurant?.currency_code)
+                    )
+                  )
+                ),
+
+                // Contact & Delivery Addresses
+                h(Grid, { item: true, xs: 12, md: 5 },
+                  h(Paper, { variant: 'outlined', sx: { p: 2, height: '100%' } },
+                    h(Typography, { variant: 'subtitle2', fontWeight: 700, mb: 1.5 }, 'Contact & Addresses'),
+                    h(Stack, { spacing: 1, mb: 2 },
+                      h(Box, null,
+                        h(Typography, { variant: 'caption', color: 'text.secondary', display: 'block' }, 'EMAIL ADDRESS'),
+                        h('a', { href: `mailto:${customerDetail.email}`, style: { color: '#b84f2e', fontWeight: 600, textDecoration: 'none' } }, customerDetail.email)
+                      ),
+                      h(Box, null,
+                        h(Typography, { variant: 'caption', color: 'text.secondary', display: 'block' }, 'TELEPHONE'),
+                        customerDetail.telephone
+                          ? h('a', { href: `tel:${customerDetail.telephone}`, style: { color: '#27211d', fontWeight: 600, textDecoration: 'none' } }, customerDetail.telephone)
+                          : h(Typography, { variant: 'body2', color: 'text.disabled' }, 'Not provided')
+                      )
+                    ),
+                    h(Divider, { sx: { my: 1.5 } }),
+                    h(Typography, { variant: 'subtitle2', fontWeight: 700, mb: 1 }, `Saved Addresses (${customerDetail.addresses?.length || 0})`),
+                    (customerDetail.addresses || []).length === 0
+                      ? h(Typography, { variant: 'body2', color: 'text.secondary' }, 'No saved delivery addresses on file.')
+                      : h(Stack, { spacing: 1 },
+                          customerDetail.addresses.map(addr =>
+                            h(Paper, { key: addr.id, variant: 'outlined', sx: { p: 1.5, bgcolor: '#fbfbfb' } },
+                              h(Typography, { variant: 'body2', fontWeight: 600 }, addr.formatted || addr.address_1),
+                              addr.city && h(Typography, { variant: 'caption', color: 'text.secondary' }, `${addr.city}, ${addr.postcode || ''} • ${addr.country || ''}`)
+                            )
+                          )
+                        )
+                  )
+                ),
+
+                // Recent Activity (Orders & Reservations)
+                h(Grid, { item: true, xs: 12, md: 7 },
+                  h(Paper, { variant: 'outlined', sx: { p: 2 } },
+                    h(Typography, { variant: 'subtitle2', fontWeight: 700, mb: 1.5 }, 'Recent Orders'),
+                    (customerDetail.recent_orders || []).length === 0
+                      ? h(Typography, { variant: 'body2', color: 'text.secondary', py: 1 }, 'No orders placed yet.')
+                      : h(Stack, { spacing: 1, mb: 2.5 },
+                          customerDetail.recent_orders.map(o =>
+                            h(Paper, { key: o.id, variant: 'outlined', sx: { p: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+                              h(Box, null,
+                                h(Typography, { variant: 'body2', fontWeight: 700 }, `${o.number} • ${o.type || 'Order'}`),
+                                h(Typography, { variant: 'caption', color: 'text.secondary' }, `${date(o.created_at)} • ${o.items_count || 1} items`)
+                              ),
+                              h(Stack, { direction: 'row', spacing: 1, alignItems: 'center' },
+                                h(Chip, { label: o.status_name, size: 'small', color: 'primary', sx: { fontWeight: 600 } }),
+                                h(Typography, { variant: 'body2', fontWeight: 800 }, money(o.total, restaurant?.currency_code))
+                              )
+                            )
+                          )
+                        ),
+
+                    h(Divider, { sx: { my: 1.5 } }),
+                    h(Typography, { variant: 'subtitle2', fontWeight: 700, mb: 1.5 }, 'Recent Table Reservations'),
+                    (customerDetail.recent_reservations || []).length === 0
+                      ? h(Typography, { variant: 'body2', color: 'text.secondary', py: 1 }, 'No reservations on file.')
+                      : h(Stack, { spacing: 1 },
+                          customerDetail.recent_reservations.map(res =>
+                            h(Paper, { key: res.id, variant: 'outlined', sx: { p: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+                              h(Box, null,
+                                h(Typography, { variant: 'body2', fontWeight: 700 }, `${res.date} at ${res.time}`),
+                                h(Typography, { variant: 'caption', color: 'text.secondary' }, `${res.guests} guests`)
+                              ),
+                              h(Chip, { label: res.status_name, size: 'small', color: 'default' })
+                            )
+                          )
+                        )
+                  )
+                )
+              )
+            ),
+            h(DialogActions, { sx: { p: 2 } },
+              h(Button, { onClick: () => { setSelectedCustomerId(null); setCustomerDetail(null); } }, 'Close')
+            )
+          )
     )
   );
 }

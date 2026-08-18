@@ -233,17 +233,205 @@ class OwnerOperationsController extends Controller
     public function customers(Request $request): JsonResponse
     {
         $this->authorizeOwner($request, 'customers.view');
-        $data = $request->validate(['search' => ['nullable', 'string', 'max:100'], 'page' => ['nullable', 'integer', 'min:1'], 'limit' => ['nullable', 'integer', 'min:1', 'max:100']]);
+        $data = $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+            'status' => ['nullable', 'string'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:100']
+        ]);
         $items = Customer::query()->where('restaurant_id', $this->tenant->id())
             ->when($data['search'] ?? null, fn($q, $search) => $q->where(fn($match) => $match
-                ->where('first_name', 'like', '%'.$search.'%')->orWhere('last_name', 'like', '%'.$search.'%')->orWhere('email', 'like', '%'.$search.'%')))
+                ->where('first_name', 'like', '%'.$search.'%')
+                ->orWhere('last_name', 'like', '%'.$search.'%')
+                ->orWhere('email', 'like', '%'.$search.'%')
+                ->orWhere('telephone', 'like', '%'.$search.'%')))
+            ->when(isset($data['status']) && $data['status'] !== '', fn($q) => $q->where('status', $data['status'] === '1' || $data['status'] === 'true' || $data['status'] === 'active'))
             ->latest('customer_id')->paginate($data['limit'] ?? 25, ['*'], 'page', $data['page'] ?? 1);
 
-        return $this->paginated($items, fn(Customer $customer) => [
-            'id' => (int)$customer->getKey(), 'name' => trim($customer->first_name.' '.$customer->last_name),
-            'email' => $customer->email, 'telephone' => $customer->telephone, 'status' => (bool)$customer->status,
-            'created_at' => $customer->created_at?->toIso8601String(),
+        $customerIds = $items->pluck('customer_id');
+        $orderStats = Order::query()->where('restaurant_id', $this->tenant->id())
+            ->whereIn('customer_id', $customerIds)
+            ->selectRaw('customer_id, COUNT(*) as orders_count, SUM(order_total) as total_spent, MAX(created_at) as last_order_at')
+            ->groupBy('customer_id')
+            ->get()
+            ->keyBy('customer_id');
+
+        return $this->paginated($items, function (Customer $customer) use ($orderStats) {
+            $stats = $orderStats->get($customer->getKey());
+            return [
+                'id' => (int)$customer->getKey(),
+                'first_name' => $customer->first_name,
+                'last_name' => $customer->last_name,
+                'name' => trim($customer->first_name.' '.$customer->last_name) ?: 'Customer #'.$customer->getKey(),
+                'email' => $customer->email,
+                'telephone' => $customer->telephone,
+                'status' => (bool)$customer->status,
+                'orders_count' => (int)($stats->orders_count ?? 0),
+                'total_spent' => (float)($stats->total_spent ?? 0.0),
+                'last_order_at' => $stats?->last_order_at,
+                'created_at' => $customer->created_at?->toIso8601String(),
+            ];
+        });
+    }
+
+    public function createCustomer(Request $request): JsonResponse
+    {
+        $this->authorizeOwner($request, 'customers.manage');
+        $data = $request->validate([
+            'first_name' => ['required', 'string', 'max:50'],
+            'last_name' => ['required', 'string', 'max:50'],
+            'email' => ['required', 'email:filter', 'max:100', Rule::unique('customers', 'email')->where('restaurant_id', $this->tenant->id())],
+            'telephone' => ['nullable', 'string', 'max:50'],
+            'password' => ['nullable', 'string', 'min:6'],
+            'status' => ['nullable', 'boolean'],
         ]);
+
+        $customer = new Customer();
+        $customer->first_name = $data['first_name'];
+        $customer->last_name = $data['last_name'];
+        $customer->email = strtolower($data['email']);
+        $customer->telephone = $data['telephone'] ?? null;
+        $customer->status = $data['status'] ?? true;
+        $customer->is_activated = true;
+        $customer->restaurant_id = $this->tenant->id();
+        if (!empty($data['password'])) {
+            $customer->password = \Illuminate\Support\Facades\Hash::make($data['password']);
+        }
+        $customer->save();
+
+        $this->audit($request, 'customer.created', 'customer', $customer->getKey(), ['email' => $customer->email]);
+
+        return response()->json(['data' => [
+            'id' => (int)$customer->getKey(),
+            'first_name' => $customer->first_name,
+            'last_name' => $customer->last_name,
+            'name' => trim($customer->first_name.' '.$customer->last_name),
+            'email' => $customer->email,
+            'telephone' => $customer->telephone,
+            'status' => (bool)$customer->status,
+            'orders_count' => 0,
+            'total_spent' => 0.0,
+            'created_at' => $customer->created_at?->toIso8601String(),
+        ]], 201);
+    }
+
+    public function showCustomer(Request $request, int $customerId): JsonResponse
+    {
+        $this->authorizeOwner($request, 'customers.view');
+        $customer = Customer::query()->where('restaurant_id', $this->tenant->id())->findOrFail($customerId);
+
+        $addresses = $customer->addresses()->with('country')->latest('address_id')->get()->map(fn($a) => [
+            'id' => (int)$a->getKey(),
+            'address_1' => $a->address_1,
+            'address_2' => $a->address_2,
+            'city' => $a->city,
+            'state' => $a->state,
+            'postcode' => $a->postcode,
+            'country' => $a->country?->country_name ?? $a->country?->name,
+            'formatted' => trim(implode(', ', array_filter([$a->address_1, $a->address_2, $a->city, $a->state, $a->postcode]))),
+        ])->values();
+
+        $recentOrders = Order::query()->with('status')->where('restaurant_id', $this->tenant->id())
+            ->where('customer_id', $customerId)
+            ->latest('order_id')
+            ->limit(10)
+            ->get()
+            ->map(fn($o) => [
+                'id' => (int)$o->getKey(),
+                'number' => '#'.(int)$o->getKey(),
+                'type' => $o->order_type_name ?? $o->order_type,
+                'status_id' => (int)$o->status_id,
+                'status_name' => $o->status_name ?? $o->status?->status_name ?? 'New',
+                'status_color' => $o->status_color ?? $o->status?->status_color,
+                'total' => (float)$o->order_total,
+                'items_count' => (int)$o->total_items,
+                'created_at' => $o->created_at?->toIso8601String(),
+            ])->values();
+
+        $recentReservations = Reservation::query()->with('status')->where('restaurant_id', $this->tenant->id())
+            ->where('customer_id', $customerId)
+            ->latest('reservation_id')
+            ->limit(10)
+            ->get()
+            ->map(fn($r) => [
+                'id' => (int)$r->getKey(),
+                'date' => $r->reserve_date?->toDateString(),
+                'time' => (string)$r->reserve_time,
+                'guests' => (int)$r->guest_num,
+                'status_name' => $r->status_name ?? $r->status?->status_name ?? 'New',
+                'status_color' => $r->status_color ?? $r->status?->status_color,
+                'created_at' => $r->created_at?->toIso8601String(),
+            ])->values();
+
+        $totalSpent = (float)Order::query()->where('restaurant_id', $this->tenant->id())
+            ->where('customer_id', $customerId)->sum('order_total');
+        $ordersCount = (int)Order::query()->where('restaurant_id', $this->tenant->id())
+            ->where('customer_id', $customerId)->count();
+
+        return response()->json(['data' => [
+            'id' => (int)$customer->getKey(),
+            'first_name' => $customer->first_name,
+            'last_name' => $customer->last_name,
+            'name' => trim($customer->first_name.' '.$customer->last_name),
+            'email' => $customer->email,
+            'telephone' => $customer->telephone,
+            'status' => (bool)$customer->status,
+            'orders_count' => $ordersCount,
+            'total_spent' => $totalSpent,
+            'addresses' => $addresses,
+            'recent_orders' => $recentOrders,
+            'recent_reservations' => $recentReservations,
+            'created_at' => $customer->created_at?->toIso8601String(),
+        ]]);
+    }
+
+    public function updateCustomer(Request $request, int $customerId): JsonResponse
+    {
+        $this->authorizeOwner($request, 'customers.manage');
+        $customer = Customer::query()->where('restaurant_id', $this->tenant->id())->findOrFail($customerId);
+
+        $data = $request->validate([
+            'first_name' => ['sometimes', 'required', 'string', 'max:50'],
+            'last_name' => ['sometimes', 'required', 'string', 'max:50'],
+            'email' => ['sometimes', 'required', 'email:filter', 'max:100', Rule::unique('customers', 'email')->where('restaurant_id', $this->tenant->id())->ignore($customerId, 'customer_id')],
+            'telephone' => ['nullable', 'string', 'max:50'],
+            'password' => ['nullable', 'string', 'min:6'],
+            'status' => ['nullable', 'boolean'],
+        ]);
+
+        if (isset($data['first_name'])) $customer->first_name = $data['first_name'];
+        if (isset($data['last_name'])) $customer->last_name = $data['last_name'];
+        if (isset($data['email'])) $customer->email = strtolower($data['email']);
+        if (array_key_exists('telephone', $data)) $customer->telephone = $data['telephone'];
+        if (isset($data['status'])) $customer->status = (bool)$data['status'];
+        if (!empty($data['password'])) {
+            $customer->password = \Illuminate\Support\Facades\Hash::make($data['password']);
+        }
+        $customer->save();
+
+        $this->audit($request, 'customer.updated', 'customer', $customerId, ['email' => $customer->email]);
+
+        return response()->json(['data' => [
+            'id' => (int)$customer->getKey(),
+            'first_name' => $customer->first_name,
+            'last_name' => $customer->last_name,
+            'name' => trim($customer->first_name.' '.$customer->last_name),
+            'email' => $customer->email,
+            'telephone' => $customer->telephone,
+            'status' => (bool)$customer->status,
+            'created_at' => $customer->created_at?->toIso8601String(),
+        ]]);
+    }
+
+    public function deleteCustomer(Request $request, int $customerId): JsonResponse
+    {
+        $this->authorizeOwner($request, 'customers.manage');
+        $customer = Customer::query()->where('restaurant_id', $this->tenant->id())->findOrFail($customerId);
+        $email = $customer->email;
+        $customer->delete();
+        $this->audit($request, 'customer.deleted', 'customer', $customerId, ['email' => $email]);
+
+        return response()->json([], 204);
     }
 
     public function locations(Request $request): JsonResponse

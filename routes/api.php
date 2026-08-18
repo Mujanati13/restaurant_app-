@@ -157,6 +157,10 @@ Route::prefix('v1')->group(function (): void {
         Route::post('categories', [OwnerOperationsController::class, 'createCategory']);
         Route::patch('categories/{categoryId}', [OwnerOperationsController::class, 'updateCategory'])->whereNumber('categoryId');
         Route::get('customers', [OwnerOperationsController::class, 'customers']);
+        Route::post('customers', [OwnerOperationsController::class, 'createCustomer']);
+        Route::get('customers/{customerId}', [OwnerOperationsController::class, 'showCustomer'])->whereNumber('customerId');
+        Route::patch('customers/{customerId}', [OwnerOperationsController::class, 'updateCustomer'])->whereNumber('customerId');
+        Route::delete('customers/{customerId}', [OwnerOperationsController::class, 'deleteCustomer'])->whereNumber('customerId');
         Route::get('locations', [OwnerOperationsController::class, 'locations']);
         Route::post('locations', [OwnerOperationsController::class, 'createLocation']);
         Route::patch('locations/{locationId}', [OwnerOperationsController::class, 'updateLocation'])->whereNumber('locationId');
