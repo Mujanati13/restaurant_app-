@@ -4825,7 +4825,7 @@ function BrandView({ revisions, restaurant, request, notify, refreshView }) {
 
   const primaryDomain = restaurant?.domains?.find(d => d.is_primary)?.host;
   const storefrontUrl = primaryDomain
-    ? (primaryDomain.startsWith('http') ? primaryDomain : `https://${primaryDomain}`)
+    ? (primaryDomain.startsWith('http') ? primaryDomain : `${window.location.protocol}//${primaryDomain}`)
     : `${window.location.protocol}//${window.location.hostname}:3000/`;
 
   return h(Box, null,
