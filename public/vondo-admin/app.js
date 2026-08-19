@@ -4823,13 +4823,18 @@ function BrandView({ revisions, restaurant, request, notify, refreshView }) {
     }
   };
 
+  const primaryDomain = restaurant?.domains?.find(d => d.is_primary)?.host;
+  const storefrontUrl = primaryDomain
+    ? (primaryDomain.startsWith('http') ? primaryDomain : `https://${primaryDomain}`)
+    : `${window.location.protocol}//${window.location.hostname}:3000/`;
+
   return h(Box, null,
     h(Box, { sx: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 } },
       h(Box, null,
         h(Typography, { variant: 'h4' }, 'Brand & storefront'),
         h(Typography, { variant: 'subtitle1' }, 'Control the shared appearance of web and mobile experiences.')
       ),
-      h(Button, { variant: 'outlined', color: 'secondary', href: '/', target: '_blank', rel: 'noopener' }, 'Open storefront')
+      h(Button, { variant: 'outlined', color: 'secondary', href: storefrontUrl, target: '_blank', rel: 'noopener' }, 'Open storefront')
     ),
     h(Grid, { container: true, spacing: 3 },
       // Brand Customizer Form
