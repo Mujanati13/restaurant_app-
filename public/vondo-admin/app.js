@@ -4823,7 +4823,7 @@ function BrandView({ revisions, restaurant, request, notify, refreshView }) {
     }
   };
 
-  const storefrontUrl = `${window.location.protocol}//${window.location.hostname}:3000/`;
+  const storefrontUrl = `${window.location.protocol}//${window.location.hostname}:3000/?restaurant=${encodeURIComponent(restaurant?.slug || restaurant?.public_id || 'default')}`;
 
   return h(Box, null,
     h(Box, { sx: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 } },
