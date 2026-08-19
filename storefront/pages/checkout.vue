@@ -2,16 +2,15 @@
 import type { Location, PaymentMethod } from '~/types/storefront'
 import { generateUUID } from '~/utils/uuid'
 
-const tenant = useNuxtData<any>('tenant-bootstrap')
+const bootstrapData = useActiveTenant()
 const api = useStorefrontApi()
 const cart = useTenantCart()
-const headers = import.meta.server ? useRequestHeaders(['host', 'x-forwarded-host', 'x-forwarded-proto']) : undefined
+const headers = useStorefrontHeaders()
 const { data: locations } = await useFetch<{ data: Location[] }>('/api/v1/storefront/locations', { headers })
 
-const bootstrapData = computed(() => tenant.data.value?.data)
 const currencyCode = computed(() => bootstrapData.value?.currency?.code || 'USD')
 const currencySymbol = computed(() => bootstrapData.value?.currency?.symbol || '$')
-const settings = computed(() => bootstrapData.value?.settings || {})
+const settings = computed(() => (bootstrapData.value?.settings || {}) as any)
 const paymentMethods = computed<PaymentMethod[]>(() => bootstrapData.value?.payment_methods || [{ code: 'cod', name: 'Cash on Delivery' }])
 
 const form = reactive({

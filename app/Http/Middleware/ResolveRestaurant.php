@@ -16,13 +16,18 @@ class ResolveRestaurant
     public function handle(Request $request, Closure $next): Response
     {
         $host = strtolower(preg_replace('/:\d+$/', '', $request->getHost()));
-        $identifier = null;
-
-        if (config('vondo.allow_tenant_header')) {
-            $identifier = trim((string)$request->header(config('vondo.tenant_header')));
+        // Check X-Vondo-Restaurant header
+        $headerName = config('vondo.tenant_header', 'X-Vondo-Restaurant');
+        if ($request->hasHeader($headerName)) {
+            $identifier = trim((string)$request->header($headerName));
         }
 
-        $restaurant = $identifier !== '' && $identifier !== null
+        // Check ?restaurant= query param
+        if (empty($identifier) && $request->filled('restaurant')) {
+            $identifier = trim((string)$request->query('restaurant'));
+        }
+
+        $restaurant = !empty($identifier)
             ? Restaurant::query()->where(fn($query) => $query->where('public_id', $identifier)->orWhere('slug', $identifier))->first()
             : RestaurantDomain::query()->with('restaurant')->where('host', $host)->whereNotNull('verified_at')->first()?->restaurant;
 

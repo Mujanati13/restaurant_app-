@@ -2,14 +2,13 @@
 import type { Location } from '~/types/storefront'
 import { generateUUID } from '~/utils/uuid'
 
-const tenant = useNuxtData<any>('tenant-bootstrap')
+const bootstrapData = useActiveTenant()
 const api = useStorefrontApi()
 const route = useRoute()
-const headers = import.meta.server ? useRequestHeaders(['host', 'x-forwarded-host', 'x-forwarded-proto']) : undefined
+const headers = useStorefrontHeaders()
 const { data: locations, error: loadError } = await useFetch<{ data: Location[] }>('/api/v1/storefront/locations', { headers })
 
-const bootstrapData = computed(() => tenant.data.value?.data)
-const settings = computed(() => bootstrapData.value?.settings || {})
+const settings = computed(() => (bootstrapData.value?.settings || {}) as any)
 
 const form = reactive({
   location_id: Number(route.query.location || 0),

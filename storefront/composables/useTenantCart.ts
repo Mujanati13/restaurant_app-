@@ -3,8 +3,8 @@ import type { MenuItem } from '~/types/storefront'
 export interface CartLine extends MenuItem { quantity: number; selected_options?: Array<{ option_id: number; values: Array<{ value_id: number; quantity?: number }> }> }
 
 export function useTenantCart() {
-  const bootstrap = useNuxtData<any>('tenant-bootstrap')
-  const tenant = computed(() => bootstrap.data.value?.data.restaurant.id || 'bootstrap')
+  const bootstrap = useActiveTenant()
+  const tenant = computed(() => bootstrap.value?.restaurant.id || 'bootstrap')
   const lines = useState<CartLine[]>('tenant-cart-lines', () => [])
   const loadedTenant = useState<string | null>('tenant-cart-loaded', () => null)
   const storageKey = computed(() => `vondo:${tenant.value}:cart_items`)

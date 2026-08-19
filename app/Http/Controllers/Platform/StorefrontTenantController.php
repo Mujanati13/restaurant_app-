@@ -30,13 +30,9 @@ class StorefrontTenantController extends Controller
         $locationId = $request->integer('location_id') ?: null;
         if ($locationId) abort_unless(Location::query()->where('restaurant_id', $this->tenant->id())->whereKey($locationId)->exists(), 404);
         $currency = Currency::getDefault();
-        $brand = $restaurant->publishedBrand();
-        $brandPayload = $this->cache->remember(
-            'published-brand',
-            300,
-            fn() => BrandConfiguration::publicPayload($brand?->configuration ?? BrandConfiguration::defaults($restaurant->name)),
-            $brand?->version ?? 0,
-        );
+        $brand = $restaurant->publishedBrand() ?: $restaurant->brandRevisions()->latest('version')->first();
+        $brandConfig = $brand?->configuration ?? BrandConfiguration::defaults($restaurant->name);
+        $brandPayload = BrandConfiguration::publicPayload($brandConfig);
         foreach (['android', 'ios'] as $platform) {
             $configuration = AppBuild::query()->where('restaurant_id', $this->tenant->id())->where('platform', $platform)
                 ->where('status', 'succeeded')->latest('finished_at')->first(['configuration'])?->configuration;

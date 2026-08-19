@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import type { MenuItem, Category } from '~/types/storefront'
 
-const tenant = useNuxtData<any>('tenant-bootstrap')
-const brand = computed(() => tenant.data.value?.data?.brand || {})
+const tenant = useActiveTenant()
+const brand = computed<any>(() => tenant.value?.brand || {})
 const sections = computed(() => {
   const list = brand.value?.sections || []
   return [...list].filter((s: any) => s.visible).sort((a: any, b: any) => a.position - b.position)
 })
 
-const headers = import.meta.server ? useRequestHeaders(['host', 'x-forwarded-host', 'x-forwarded-proto']) : undefined
+const headers = useStorefrontHeaders()
 const { data: menuData, error, refresh, status } = await useFetch<{ data: MenuItem[] }>('/api/v1/storefront/menus?limit=12', { headers })
 const { data: categories } = await useFetch<{ data: Category[] }>('/api/v1/storefront/categories?limit=12', { headers })
 
@@ -33,7 +33,7 @@ function selectCategory(id: number | null) {
   selectedCategoryId.value = id
 }
 
-const currencyCode = computed(() => tenant.data.value?.data?.currency?.code || 'USD')
+const currencyCode = computed(() => tenant.value?.currency?.code || 'USD')
 </script>
 
 <template>

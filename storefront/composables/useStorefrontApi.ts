@@ -3,8 +3,8 @@ import type { TenantBootstrap } from '~/types/storefront'
 interface SessionPayload { token: string; refresh_token?: string | null; expires_at: string }
 
 export function useStorefrontApi() {
-  const bootstrap = useNuxtData<{ data: TenantBootstrap }>('tenant-bootstrap')
-  const tenantId = computed(() => bootstrap.data.value?.data.restaurant.id || 'bootstrap')
+  const bootstrap = useActiveTenant()
+  const tenantId = computed(() => bootstrap.value?.restaurant.id || 'bootstrap')
   const authenticated = useState('storefront-authenticated', () => false)
   let refreshPromise: Promise<void> | null = null
   const key = (name: string) => `vondo:${tenantId.value}:${name}`
