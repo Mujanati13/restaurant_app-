@@ -105,6 +105,15 @@ class StorefrontTenantController extends Controller
             $tipPresets = [10, 15, 20];
         }
 
+        $currencyCode = strtoupper((string)($restaurant->currency_code ?: $currency->currency_code));
+        $symbolMap = [
+            'CHF' => 'CHF ',
+            'EUR' => '€',
+            'USD' => '$',
+            'GBP' => '£',
+        ];
+        $currencySymbol = $rawSettings['currency_symbol'] ?? ($symbolMap[$currencyCode] ?? $currency->currency_symbol);
+
         return response()->json(['data' => [
             'restaurant' => [
                 'id' => $restaurant->public_id,
@@ -118,8 +127,8 @@ class StorefrontTenantController extends Controller
             'brand' => $brandPayload,
             'brand_version' => $brand?->version ?? 0,
             'currency' => [
-                'code' => $restaurant->currency_code ?: $currency->currency_code,
-                'symbol' => $rawSettings['currency_symbol'] ?? $currency->currency_symbol,
+                'code' => $currencyCode,
+                'symbol' => $currencySymbol,
                 'symbol_position' => (bool)$currency->symbol_position,
                 'decimal_position' => (int)$currency->decimal_position,
             ],

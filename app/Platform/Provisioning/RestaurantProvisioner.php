@@ -42,8 +42,8 @@ class RestaurantProvisioner
                 'name' => $data['restaurant_name'],
                 'slug' => $slug,
                 'status' => 'trial',
-                'timezone' => $data['timezone'] ?? config('app.timezone'),
-                'currency_code' => strtoupper($data['currency_code'] ?? 'USD'),
+                'timezone' => $data['timezone'] ?? 'Europe/Zurich',
+                'currency_code' => strtoupper($data['currency_code'] ?? 'CHF'),
             ]);
             $host = $slug.'.'.config('vondo.base_domain');
             $restaurant->domains()->create(['host' => strtolower($host), 'is_primary' => true, 'verified_at' => now()]);

@@ -673,8 +673,46 @@ function App() {
                 h(Grid, { item: true, xs: 12 }, h(TextField, { label: 'Email Address', name: 'email', type: 'email', required: true, fullWidth: true, size: 'small' })),
                 h(Grid, { item: true, xs: 12, sm: 6 }, h(TextField, { label: 'Password', name: 'password', type: 'password', required: true, fullWidth: true, size: 'small', helperText: 'Min 10 characters' })),
                 h(Grid, { item: true, xs: 12, sm: 6 }, h(TextField, { label: 'Confirm Password', name: 'password_confirmation', type: 'password', required: true, fullWidth: true, size: 'small' })),
-                h(Grid, { item: true, xs: 12, sm: 6 }, h(TextField, { label: 'Timezone', name: 'timezone', defaultValue: 'Africa/Casablanca', required: true, fullWidth: true, size: 'small' })),
-                h(Grid, { item: true, xs: 12, sm: 6 }, h(TextField, { label: 'Currency', name: 'currency_code', defaultValue: 'MAD', required: true, fullWidth: true, size: 'small' })),
+                h(Grid, { item: true, xs: 12, sm: 6 },
+                  h(TextField, {
+                    label: 'Timezone',
+                    name: 'timezone',
+                    select: true,
+                    SelectProps: { native: true },
+                    defaultValue: 'Europe/Zurich',
+                    required: true,
+                    fullWidth: true,
+                    size: 'small',
+                    helperText: 'Automatic: Switzerland time (Europe/Zurich)'
+                  },
+                    h('option', { value: 'Europe/Zurich' }, 'Europe/Zurich (Switzerland - Bern, Zurich, Geneva)'),
+                    h('option', { value: 'Europe/Berlin' }, 'Europe/Berlin (Germany, Austria)'),
+                    h('option', { value: 'Europe/Vienna' }, 'Europe/Vienna (Austria)'),
+                    h('option', { value: 'Europe/Paris' }, 'Europe/Paris (France)'),
+                    h('option', { value: 'Europe/Rome' }, 'Europe/Rome (Italy)'),
+                    h('option', { value: 'Europe/London' }, 'Europe/London (United Kingdom)'),
+                    h('option', { value: 'Europe/Madrid' }, 'Europe/Madrid (Spain)'),
+                    h('option', { value: 'UTC' }, 'UTC (Universal Coordinated Time)')
+                  )
+                ),
+                h(Grid, { item: true, xs: 12, sm: 6 },
+                  h(TextField, {
+                    label: 'Currency',
+                    name: 'currency_code',
+                    select: true,
+                    SelectProps: { native: true },
+                    defaultValue: 'CHF',
+                    required: true,
+                    fullWidth: true,
+                    size: 'small',
+                    helperText: 'Automatic: Swiss Franc (CHF)'
+                  },
+                    h('option', { value: 'CHF' }, 'CHF — Swiss Franc (CHF)'),
+                    h('option', { value: 'EUR' }, 'EUR — Euro (€)'),
+                    h('option', { value: 'USD' }, 'USD — US Dollar ($)'),
+                    h('option', { value: 'GBP' }, 'GBP — British Pound (£)')
+                  )
+                ),
                 h(Grid, { item: true, xs: 12 },
                   h(Button, { type: 'submit', variant: 'contained', color: 'primary', fullWidth: true, size: 'large', disabled: loading },
                     loading ? h(CircularProgress, { size: 24 }) : 'Create restaurant'
@@ -5820,8 +5858,42 @@ function PlatformRestaurantsView({ data, setSelectedRestaurant, setCurrentView, 
             h(Grid, { item: true, xs: 12 }, h(TextField, { label: 'Owner Email', name: 'email', type: 'email', required: true, size: 'small', fullWidth: true })),
             h(Grid, { item: true, xs: 12, sm: 6 }, h(TextField, { label: 'Temporary Password', name: 'password', type: 'password', required: true, size: 'small', fullWidth: true, helperText: 'Min 10 characters' })),
             h(Grid, { item: true, xs: 12, sm: 6 }, h(TextField, { label: 'Confirm Password', name: 'password_confirmation', type: 'password', required: true, size: 'small', fullWidth: true })),
-            h(Grid, { item: true, xs: 12, sm: 6 }, h(TextField, { label: 'Timezone', name: 'timezone', defaultValue: 'Africa/Casablanca', required: true, size: 'small', fullWidth: true })),
-            h(Grid, { item: true, xs: 12, sm: 6 }, h(TextField, { label: 'Currency Code', name: 'currency_code', defaultValue: 'MAD', required: true, size: 'small', fullWidth: true }))
+            h(Grid, { item: true, xs: 12, sm: 6 },
+              h(TextField, {
+                label: 'Timezone',
+                name: 'timezone',
+                select: true,
+                SelectProps: { native: true },
+                defaultValue: 'Europe/Zurich',
+                required: true,
+                size: 'small',
+                fullWidth: true
+              },
+                h('option', { value: 'Europe/Zurich' }, 'Europe/Zurich (Switzerland)'),
+                h('option', { value: 'Europe/Berlin' }, 'Europe/Berlin (Germany)'),
+                h('option', { value: 'Europe/Paris' }, 'Europe/Paris (France)'),
+                h('option', { value: 'Europe/Rome' }, 'Europe/Rome (Italy)'),
+                h('option', { value: 'Europe/London' }, 'Europe/London (UK)'),
+                h('option', { value: 'UTC' }, 'UTC')
+              )
+            ),
+            h(Grid, { item: true, xs: 12, sm: 6 },
+              h(TextField, {
+                label: 'Currency Code',
+                name: 'currency_code',
+                select: true,
+                SelectProps: { native: true },
+                defaultValue: 'CHF',
+                required: true,
+                size: 'small',
+                fullWidth: true
+              },
+                h('option', { value: 'CHF' }, 'CHF — Swiss Franc (CHF)'),
+                h('option', { value: 'EUR' }, 'EUR — Euro (€)'),
+                h('option', { value: 'USD' }, 'USD — US Dollar ($)'),
+                h('option', { value: 'GBP' }, 'GBP — British Pound (£)')
+              )
+            )
           )
         ),
         h(DialogActions, { sx: { p: 2.5 } },

@@ -21,6 +21,22 @@ class OwnerRegistrationController extends Controller
     ): JsonResponse
     {
         return $idempotency->run($request, function () use ($request, $provisioner, $security): array {
+            // Normalize timezone if user entered a region/country keyword like "Europa", "Europe", "Swiss", "Switzerland", or empty
+            if ($request->filled('timezone')) {
+                $tz = trim((string)$request->input('timezone'));
+                if (preg_match('/^(europa|europe|swiss|switzerland|ch|zurich|bern|geneva)$/i', $tz)) {
+                    $request->merge(['timezone' => 'Europe/Zurich']);
+                }
+            } else {
+                $request->merge(['timezone' => 'Europe/Zurich']);
+            }
+
+            if (!$request->filled('currency_code')) {
+                $request->merge(['currency_code' => 'CHF']);
+            } else {
+                $request->merge(['currency_code' => strtoupper(trim((string)$request->input('currency_code')))]);
+            }
+
             $data = $request->validate([
                 'owner_name' => ['required', 'string', 'max:80'],
                 'restaurant_name' => ['required', 'string', 'max:80'],
@@ -30,6 +46,8 @@ class OwnerRegistrationController extends Controller
                 'currency_code' => ['nullable', 'string', 'size:3'],
                 'template_code' => ['nullable', 'string', Rule::exists('platform_templates', 'code')->where('active', true)],
             ]);
+            $data['timezone'] = $data['timezone'] ?: 'Europe/Zurich';
+            $data['currency_code'] = strtoupper($data['currency_code'] ?: 'CHF');
             $restaurant = $provisioner->provision($data, $request->ip());
             $owner = $restaurant->memberships()->with('user')->where('role', 'owner')->firstOrFail()->user;
             $requireVerification = (bool) config('vondo.require_email_verification', false);
