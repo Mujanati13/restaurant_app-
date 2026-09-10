@@ -136,6 +136,11 @@ async function submit() {
       headers: { 'Idempotency-Key': generateUUID() },
       body,
     })
+    if (result?.data?.checkout_url) {
+      cart.clear()
+      window.location.href = result.data.checkout_url
+      return
+    }
     success.value = result.data.id
     cart.clear()
   } catch (reason: any) {

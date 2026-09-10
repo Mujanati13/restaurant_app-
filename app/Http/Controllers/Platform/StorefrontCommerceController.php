@@ -18,6 +18,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
 class StorefrontCommerceController extends Controller
@@ -220,8 +222,87 @@ class StorefrontCommerceController extends Controller
             SendTenantPush::dispatch($this->tenant->id(), 'vendor', 'New order', 'A new order is ready for review.',
                 ['type' => 'order', 'id' => (string) $order->getKey(), 'route' => '/orders/'.$order->getKey()]);
 
-            return [['data' => $this->orderData($order->fresh(['status', 'location', 'menus.menu_options', 'status_history.status']))], 201];
+            $checkoutUrl = null;
+            if (($data['payment_method'] ?? '') === 'stripe' && !empty($settings['payments_stripe_secret_key'])) {
+                try {
+                    $secretKey = trim((string)$settings['payments_stripe_secret_key']);
+                    $currencyCode = strtolower((string)($this->tenant->get()->currency_code ?: 'CHF'));
+                    $amountInMinor = (int) round($total * 100);
+                    $origin = $request->header('origin') ?: $request->header('referer') ?: url('/');
+                    $origin = rtrim($origin, '/');
+
+                    $stripeRes = Http::withToken($secretKey)
+                        ->asForm()
+                        ->timeout(12)
+                        ->post('https://api.stripe.com/v1/checkout/sessions', [
+                            'mode' => 'payment',
+                            'customer_email' => $data['email'] ?? $customer->email,
+                            'client_reference_id' => (string) $order->getKey(),
+                            'line_items' => [
+                                [
+                                    'price_data' => [
+                                        'currency' => $currencyCode,
+                                        'unit_amount' => $amountInMinor,
+                                        'product_data' => [
+                                            'name' => "Order #{$order->getKey()} — {$this->tenant->get()->name}",
+                                            'description' => ucfirst($order->order_type) . " order for {$order->first_name} {$order->last_name}",
+                                        ],
+                                    ],
+                                    'quantity' => 1,
+                                ],
+                            ],
+                            'success_url' => "{$origin}/account?order={$order->getKey()}&payment=success",
+                            'cancel_url' => "{$origin}/checkout?order={$order->getKey()}&payment=cancelled",
+                            'metadata' => [
+                                'order_id' => (string) $order->getKey(),
+                                'restaurant_id' => (string) $this->tenant->id(),
+                            ],
+                        ]);
+
+                    if ($stripeRes->successful()) {
+                        $checkoutUrl = $stripeRes->json('url');
+                    } else {
+                        Log::warning('Stripe checkout session creation returned error: ' . $stripeRes->body());
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('Stripe checkout session creation failed: ' . $e->getMessage());
+                }
+            }
+
+            $orderPayload = $this->orderData($order->fresh(['status', 'location', 'menus.menu_options', 'status_history.status']));
+            if ($checkoutUrl) {
+                $orderPayload['checkout_url'] = $checkoutUrl;
+            }
+
+            return [['data' => $orderPayload], 201];
         });
+    }
+
+    public function handleStripeWebhook(Request $request): JsonResponse
+    {
+        $settings = $this->tenant->get()->settings()->pluck('value', 'key')->all();
+        $payload = $request->getContent();
+        $event = json_decode($payload, true);
+
+        if (!$event || !isset($event['type'])) {
+            return response()->json(['error' => 'Invalid event payload'], 400);
+        }
+
+        if ($event['type'] === 'checkout.session.completed') {
+            $session = $event['data']['object'] ?? [];
+            $orderId = $session['client_reference_id'] ?? ($session['metadata']['order_id'] ?? null);
+            if ($orderId) {
+                $order = Order::query()->where('restaurant_id', $this->tenant->id())->find($orderId);
+                if ($order) {
+                    $order->forceFill([
+                        'processed' => true,
+                        'payment' => 'stripe',
+                    ])->save();
+                }
+            }
+        }
+
+        return response()->json(['received' => true]);
     }
 
     public function reservations(Request $request): JsonResponse
@@ -298,11 +379,6 @@ class StorefrontCommerceController extends Controller
         if (!$customer) {
             abort(401, 'Unauthenticated.');
         }
-        return $customer;
-    }
-    {
-        /** @var Customer $customer */
-        $customer = $request->user();
         return $customer;
     }
 

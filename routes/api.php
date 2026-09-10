@@ -106,6 +106,7 @@ Route::prefix('v1')->group(function (): void {
 
         Route::post('orders', [StorefrontCommerceController::class, 'createOrder']);
         Route::post('reservations', [StorefrontCommerceController::class, 'createReservation']);
+        Route::post('webhooks/stripe', [StorefrontCommerceController::class, 'handleStripeWebhook']);
 
         Route::middleware([Authenticate::class, 'restaurant.customer'])->group(function (): void {
             Route::post('push-subscriptions', fn(Request $request, MobilePushController $controller) => $controller->store($request, 'customer'));
