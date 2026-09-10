@@ -182,7 +182,11 @@ function App() {
 
   const [token, setToken] = useState(() => localStorage.getItem(tokenKey()));
   const [refreshToken, setRefreshToken] = useState(() => localStorage.getItem(refreshKey()));
-  const [restaurantHint, setRestaurantHint] = useState(() => new URLSearchParams(window.location.search).get('restaurant'));
+  const [restaurantHint, setRestaurantHint] = useState(() => (
+    new URLSearchParams(window.location.search).get('restaurant') ||
+    localStorage.getItem(`vondo:${window.location.host}:restaurant_hint`) ||
+    null
+  ));
 
   const [currentView, setCurrentView] = useState(() => (
     getViewFromHash(mode) || (mode === 'owner' ? 'dashboard' : mode === 'vendor' ? 'vendor-dashboard' : 'overview')
@@ -244,13 +248,20 @@ function App() {
       setRefreshToken(null);
       localStorage.removeItem(refreshKey(explicitMode));
     }
+    if (session.restaurant?.public_id || session.restaurant?.slug) {
+      const hint = session.restaurant.public_id || session.restaurant.slug;
+      setRestaurantHint(hint);
+      localStorage.setItem(`vondo:${window.location.host}:restaurant_hint`, hint);
+    }
   }, [mode, tokenKey, refreshKey]);
 
   const clearSession = useCallback((explicitMode = mode) => {
     localStorage.removeItem(tokenKey(explicitMode));
     localStorage.removeItem(refreshKey(explicitMode));
+    localStorage.removeItem(`vondo:${window.location.host}:restaurant_hint`);
     setToken(null);
     setRefreshToken(null);
+    setRestaurantHint(null);
     setRestaurant(null);
     setOwnerBootstrap(null);
     setVendorBootstrap(null);
@@ -263,7 +274,8 @@ function App() {
     const headers = { Accept: 'application/json' };
     const currentToken = localStorage.getItem(tokenKey());
     if (currentToken) headers.Authorization = `Bearer ${currentToken}`;
-    if (restaurantHint) headers['X-Vondo-Restaurant'] = restaurantHint;
+    const activeHint = restaurantHint || localStorage.getItem(`vondo:${window.location.host}:restaurant_hint`);
+    if (activeHint) headers['X-Vondo-Restaurant'] = activeHint;
     if (!form && body !== undefined) headers['Content-Type'] = 'application/json';
     if (idempotent) headers['Idempotency-Key'] = uuid();
 
@@ -275,7 +287,7 @@ function App() {
         body: body === undefined ? undefined : (form ? body : JSON.stringify(body)),
       });
     } catch (err) {
-      throw new Error('The server is unreachable. Check Docker and try again.');
+      throw new Error('The server is unreachable. Check network connection and Docker.');
     }
 
     if (response.status === 204) return null;
@@ -285,9 +297,11 @@ function App() {
       if (response.status === 401 && !retried && refreshToken && !path.endsWith('/refresh')) {
         const refreshEndpoint = mode === 'owner' ? '/api/v1/owner/refresh' : mode === 'vendor' ? '/api/v1/vendor/refresh' : '/api/v1/platform/refresh';
         try {
+          const refreshHeaders = { Accept: 'application/json', 'Content-Type': 'application/json' };
+          if (activeHint) refreshHeaders['X-Vondo-Restaurant'] = activeHint;
           const res = await fetch(refreshEndpoint, {
             method: 'POST',
-            headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+            headers: refreshHeaders,
             body: JSON.stringify({ refresh_token: refreshToken }),
           });
           const refreshData = await res.json().catch(() => ({}));
@@ -613,14 +627,18 @@ function App() {
                 setLoading(true);
                 try {
                   const endpoint = mode === 'owner' ? '/api/v1/owner/token' : mode === 'vendor' ? '/api/v1/vendor/token' : '/api/v1/platform/token';
-                  const body = { email, password, device_name: `Vondo ${mode} React Portal` };
+                  const activeHint = restaurantHint || localStorage.getItem(`vondo:${window.location.host}:restaurant_hint`);
+                  const body = { email, password, device_name: `Vondo ${mode} Mobile Portal` };
+                  if (activeHint) body.restaurant = activeHint;
                   if (mode === 'platform' && mfa_code) body.mfa_code = mfa_code;
                   const res = await request(endpoint, { method: 'POST', body });
                   saveSession(res);
+                  setAuthMessage('');
                   setAuthAction('authenticated');
                   notify('Signed in successfully.', 'success');
                 } catch (err) {
-                  notify(err.message, 'error');
+                  setAuthMessage(err.message || 'Sign in failed. Check your credentials and restaurant network.');
+                  notify(err.message || 'Sign in failed.', 'error');
                 } finally {
                   setLoading(false);
                 }
@@ -814,7 +832,7 @@ function App() {
         open: toast.open,
         autoHideDuration: 4000,
         onClose: () => setToast(prev => ({ ...prev, open: false })),
-        anchorOrigin: { vertical: 'bottom', horizontal: 'right' }
+        anchorOrigin: { vertical: 'bottom', horizontal: 'center' }
       },
         h(Alert, { onClose: () => setToast(prev => ({ ...prev, open: false })), severity: toast.severity, sx: { width: '100%' } }, toast.message)
       )
