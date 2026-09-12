@@ -20,7 +20,7 @@ services:
       CACHE_DRIVER: redis
       QUEUE_CONNECTION: redis
       SESSION_DRIVER: redis
-      VONDO_ALLOW_TENANT_HEADER: "true"
+      VONDO_ALLOW_TENANT_HEADER: "${VONDO_ALLOW_TENANT_HEADER:-false}"
       VONDO_API_HEALTH_URL: http://webserver/api/v1/health/live
       VONDO_STOREFRONT_HEALTH_URL: http://storefront:3000/health
     depends_on:
@@ -73,7 +73,7 @@ services:
       CACHE_DRIVER: redis
       QUEUE_CONNECTION: redis
       SESSION_DRIVER: redis
-      VONDO_ALLOW_TENANT_HEADER: "true"
+      VONDO_ALLOW_TENANT_HEADER: "${VONDO_ALLOW_TENANT_HEADER:-false}"
       VONDO_API_HEALTH_URL: http://webserver/api/v1/health/live
       VONDO_STOREFRONT_HEALTH_URL: http://storefront:3000/health
     depends_on:
@@ -102,7 +102,7 @@ services:
       CACHE_DRIVER: redis
       QUEUE_CONNECTION: redis
       SESSION_DRIVER: redis
-      VONDO_ALLOW_TENANT_HEADER: "true"
+      VONDO_ALLOW_TENANT_HEADER: "${VONDO_ALLOW_TENANT_HEADER:-false}"
       VONDO_API_HEALTH_URL: http://webserver/api/v1/health/live
       VONDO_STOREFRONT_HEALTH_URL: http://storefront:3000/health
     depends_on:

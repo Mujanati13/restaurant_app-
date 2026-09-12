@@ -18,7 +18,7 @@ class VendorApi extends TenantApiClient {
   VendorApi({String? baseUrl, String? restaurantKey})
     : super(
         baseUrl: _normalizeBaseUrl(baseUrl ?? const String.fromEnvironment(
-          'VONDO_API_URL', defaultValue: 'http://185.203.116.172:8081/api')),
+          'VONDO_API_URL', defaultValue: 'https://backend.deliveriano.ch/api')),
         restaurantKey: restaurantKey ??
           const String.fromEnvironment(
             'VONDO_RESTAURANT',
