@@ -9,9 +9,16 @@ use Illuminate\Support\Str;
 
 class Restaurant extends Model
 {
-    protected $fillable = ['public_id', 'name', 'slug', 'status', 'timezone', 'currency_code', 'onboarding_completed_at'];
+    protected $fillable = [
+        'public_id', 'name', 'slug', 'status', 'timezone', 'currency_code', 'onboarding_completed_at',
+        'discovery_enabled', 'cuisine_tags', 'listing_description', 'cover_photo_url',
+    ];
 
-    protected $casts = ['onboarding_completed_at' => 'datetime'];
+    protected $casts = [
+        'onboarding_completed_at' => 'datetime',
+        'discovery_enabled' => 'boolean',
+        'cuisine_tags' => 'array',
+    ];
 
     protected static function booted(): void
     {

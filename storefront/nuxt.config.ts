@@ -5,8 +5,12 @@ export default defineNuxtConfig({
   css: ['~/assets/nuxt.css'],
   runtimeConfig: {
     apiInternalBase: process.env.NUXT_API_INTERNAL_BASE || 'http://webserver/api',
-    defaultRestaurant: process.env.NUXT_DEFAULT_RESTAURANT || 'default',
-    public: { apiBase: '/api' },
+    baseDomain: process.env.NUXT_BASE_DOMAIN || 'deliveriano.ch',
+    defaultRestaurant: process.env.NUXT_DEFAULT_RESTAURANT || '',
+    public: {
+      apiBase: '/api',
+      baseDomain: process.env.NUXT_BASE_DOMAIN || 'deliveriano.ch',
+    },
   },
   app: {
     head: {
@@ -29,6 +33,10 @@ export default defineNuxtConfig({
       navigateFallback: '/',
       globPatterns: ['**/*.{js,css,html,svg,png,webp,woff2}'],
       runtimeCaching: [{
+        // Exclude precise-location discovery responses from shared service-worker caching
+        urlPattern: /\/api\/v1\/discovery\//,
+        handler: 'NetworkOnly',
+      }, {
         urlPattern: /\/api\/v1\/storefront\/bootstrap(?:\?|$)/,
         handler: 'NetworkFirst',
         options: { cacheName: 'tenant-bootstrap', networkTimeoutSeconds: 4, expiration: { maxEntries: 10, maxAgeSeconds: 86400 } },

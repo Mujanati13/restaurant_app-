@@ -123,6 +123,7 @@ class StorefrontTenantController extends Controller
                 'email' => $rawSettings['business_email'] ?? null,
                 'phone' => $rawSettings['business_phone'] ?? null,
                 'address' => $rawSettings['business_address'] ?? null,
+                'listing_description' => $restaurant->listing_description,
             ],
             'brand' => $brandPayload,
             'brand_version' => $brand?->version ?? 0,

@@ -16,42 +16,51 @@ class ResolveRestaurant
     public function handle(Request $request, Closure $next): Response
     {
         $host = strtolower(preg_replace('/:\d+$/', '', $request->getHost()));
-        $identifier = null;
+        $baseDomain = strtolower((string)config('vondo.base_domain'));
+        $isIpOrLocal = in_array($host, ['localhost', '127.0.0.1'], true)
+            || filter_var($host, FILTER_VALIDATE_IP) !== false
+            || $host === 'webserver';
 
-        // Check X-Vondo-Restaurant header
-        $headerName = config('vondo.tenant_header', 'X-Vondo-Restaurant');
-        if ($request->hasHeader($headerName)) {
-            $identifier = trim((string)$request->header($headerName));
+        $restaurant = null;
+
+        // 1. Check verified custom domain first
+        $restaurant = RestaurantDomain::query()
+            ->with('restaurant')
+            ->where('host', $host)
+            ->whereNotNull('verified_at')
+            ->first()?->restaurant;
+
+        // 2. Check restaurant subdomain (e.g. <slug>.deliveriano.ch)
+        if (!$restaurant && str_ends_with($host, '.' . $baseDomain)) {
+            $subdomain = substr($host, 0, -strlen('.' . $baseDomain));
+            if (!in_array($subdomain, ['www', 'api', 'backend', 'marketplace', 'admin'], true)) {
+                $restaurant = Restaurant::query()->where('slug', $subdomain)->first();
+            }
         }
 
-        // Check ?restaurant= query param
-        if (empty($identifier) && $request->filled('restaurant')) {
-            $identifier = trim((string)$request->query('restaurant'));
-        }
-
-        // Check JSON / POST body parameter
-        if (empty($identifier) && $request->filled('restaurant')) {
-            $identifier = trim((string)$request->input('restaurant'));
-        }
-
-        $restaurant = !empty($identifier)
-            ? Restaurant::query()->where(fn($query) => $query->where('public_id', $identifier)->orWhere('slug', $identifier))->first()
-            : RestaurantDomain::query()->with('restaurant')->where('host', $host)->whereNotNull('verified_at')->first()?->restaurant;
-
+        // 3. If not resolved by domain/subdomain, check explicit header or query param
+        // (e.g. during dev, mobile app, or direct ?restaurant=<slug> links)
         if (!$restaurant) {
-            $baseDomain = strtolower((string)config('vondo.base_domain'));
-            $isIpOrLocal = in_array($host, ['localhost', '127.0.0.1'], true)
-                || filter_var($host, FILTER_VALIDATE_IP) !== false
-                || $host === 'webserver';
+            $identifier = null;
+            $headerName = config('vondo.tenant_header', 'X-Vondo-Restaurant');
+            if ($request->hasHeader($headerName)) {
+                $identifier = trim((string)$request->header($headerName));
+            } elseif ($request->filled('restaurant')) {
+                $identifier = trim((string)$request->input('restaurant'));
+            }
 
-            $slug = ($host === $baseDomain || $isIpOrLocal)
-                ? config('vondo.default_restaurant_slug')
-                : (str_ends_with($host, '.'.$baseDomain) ? substr($host, 0, -strlen('.'.$baseDomain)) : null);
+            if (!empty($identifier)) {
+                $restaurant = Restaurant::query()
+                    ->where(fn($query) => $query->where('public_id', $identifier)->orWhere('slug', $identifier))
+                    ->first();
+            }
+        }
 
-            $restaurant = $slug ? Restaurant::query()->where('slug', $slug)->first() : null;
-
-            // Fallback for IP address or local development if default slug does not match: use first active restaurant
-            if (!$restaurant && $isIpOrLocal) {
+        // 4. Fallback for IP/local development ONLY if marketplace is NOT enabled
+        if (!$restaurant && $isIpOrLocal && !config('vondo.marketplace_enabled', true)) {
+            $defaultSlug = config('vondo.default_restaurant_slug');
+            $restaurant = $defaultSlug ? Restaurant::query()->where('slug', $defaultSlug)->first() : null;
+            if (!$restaurant) {
                 $restaurant = Restaurant::query()->where('status', 'active')->orderBy('id')->first();
             }
         }

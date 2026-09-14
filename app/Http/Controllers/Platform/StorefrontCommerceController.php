@@ -207,6 +207,14 @@ class StorefrontCommerceController extends Controller
                 ->update(['restaurant_id' => $this->tenant->id()]);
 
             $subtotal = collect($items)->sum(fn(CartItem $item) => $item->subtotal());
+
+            if ($data['order_type'] === 'delivery') {
+                $minDeliveryOrder = (float)$this->settings->get('min_delivery_order', 0.0, (int)$location->getKey());
+                if ($minDeliveryOrder > 0 && $subtotal < $minDeliveryOrder) {
+                    abort(422, sprintf('Minimum order amount for delivery is %.2f.', $minDeliveryOrder));
+                }
+            }
+
             $deliveryFee = $data['order_type'] === 'delivery' ? (float)$this->settings->get('delivery_charge', 0.0, (int)$location->getKey()) : 0.0;
             $taxRate = (float)($settings['tax_rate'] ?? 0);
             $taxAmount = $taxRate > 0 ? round($subtotal * ($taxRate / 100), 2) : 0.0;

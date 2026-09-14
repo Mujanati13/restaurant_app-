@@ -28,9 +28,38 @@ class OwnerRestaurantController extends Controller
         $restaurant = $this->tenant->get();
         $settings = $restaurant->settings()->get()->mapWithKeys(fn(RestaurantSetting $s) => [$s->key => $s->value]);
 
+        $locations = \Igniter\Local\Models\Location::query()->where('restaurant_id', $restaurant->getKey())->get();
+        $missingLocationCoords = [];
+        foreach ($locations as $loc) {
+            $hasCoords = !empty($loc->location_lat) && !empty($loc->location_lng) && $loc->location_lat != 0 && $loc->location_lng != 0;
+            if (!$hasCoords) {
+                $missingLocationCoords[] = [
+                    'id' => (int)$loc->getKey(),
+                    'name' => $loc->location_name,
+                ];
+            }
+        }
+
+        $discoverySetup = [
+            'discovery_enabled' => (bool)$restaurant->discovery_enabled,
+            'cuisine_tags' => is_array($restaurant->cuisine_tags) ? $restaurant->cuisine_tags : (json_decode((string)$restaurant->cuisine_tags, true) ?: []),
+            'listing_description' => $restaurant->listing_description,
+            'cover_photo_url' => $restaurant->cover_photo_url,
+            'all_locations_have_coordinates' => empty($missingLocationCoords),
+            'missing_locations' => $missingLocationCoords,
+            'warning' => !empty($missingLocationCoords)
+                ? 'One or more restaurant locations are missing coordinates. Customers searching by address or distance will not see locations without valid coordinates.'
+                : null,
+        ];
+
         return response()->json(['data' => [
             'id' => $restaurant->public_id, 'name' => $restaurant->name, 'slug' => $restaurant->slug,
             'status' => $restaurant->status, 'timezone' => $restaurant->timezone, 'currency_code' => $restaurant->currency_code,
+            'discovery_enabled' => (bool)$restaurant->discovery_enabled,
+            'cuisine_tags' => $discoverySetup['cuisine_tags'],
+            'listing_description' => $restaurant->listing_description,
+            'cover_photo_url' => $restaurant->cover_photo_url,
+            'discovery_setup' => $discoverySetup,
             'settings' => $settings,
             'domains' => $restaurant->domains()->orderByDesc('is_primary')->get()->map(fn($domain) => $this->domainData($domain))->values(),
             'members' => $restaurant->memberships()->orderBy('role')->get()->map(fn($member) => [
@@ -50,11 +79,18 @@ class OwnerRestaurantController extends Controller
             'name' => ['sometimes', 'required', 'string', 'max:80'],
             'timezone' => ['sometimes', 'required', 'timezone'],
             'currency_code' => ['sometimes', 'required', 'string', 'size:3'],
+            'discovery_enabled' => ['sometimes', 'boolean'],
+            'cuisine_tags' => ['sometimes', 'array'],
+            'cuisine_tags.*' => ['string', 'max:50'],
+            'listing_description' => ['sometimes', 'nullable', 'string', 'max:1000'],
+            'cover_photo_url' => ['sometimes', 'nullable', 'string', 'max:500'],
             'settings' => ['sometimes', 'array'],
         ]);
 
         $restaurant = $this->tenant->get();
-        $baseUpdates = array_intersect_key($data, array_flip(['name', 'timezone']));
+        $baseUpdates = array_intersect_key($data, array_flip([
+            'name', 'timezone', 'discovery_enabled', 'cuisine_tags', 'listing_description', 'cover_photo_url',
+        ]));
         if (isset($data['currency_code'])) {
             $baseUpdates['currency_code'] = strtoupper($data['currency_code']);
         }

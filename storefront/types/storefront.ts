@@ -22,6 +22,7 @@ export interface TenantBootstrap {
     email?: string | null
     phone?: string | null
     address?: string | null
+    listing_description?: string | null
   }
   brand: {
     identity: { name: string; tagline?: string; logo_url?: string }

@@ -2,6 +2,8 @@
 
 return [
     'base_domain' => env('VONDO_BASE_DOMAIN', parse_url((string)env('APP_URL', 'http://localhost'), PHP_URL_HOST) ?: 'localhost'),
+    'marketplace_enabled' => (bool)env('VONDO_MARKETPLACE_ENABLED', true),
+    'google_maps_api_key' => env('GOOGLE_MAPS_API_KEY', env('IGNITER_GOOGLE_MAPS_KEY')),
     'default_restaurant_slug' => env('VONDO_DEFAULT_RESTAURANT', 'default'),
     'require_email_verification' => (bool)env('VONDO_REQUIRE_EMAIL_VERIFICATION', false),
     'allow_tenant_header' => (bool)env('VONDO_ALLOW_TENANT_HEADER', false),

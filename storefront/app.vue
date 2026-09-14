@@ -1,32 +1,67 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
+import { useIsMarketplace, useTenant } from '~/composables/useTenant'
+
+const isMarketplace = useIsMarketplace()
 const { data: bootstrap, status, error, refresh } = await useTenant()
 const route = useRoute()
 const tenant = computed(() => bootstrap.value?.data)
 const theme = computed(() => tenant.value?.brand.theme || {})
-const rootStyle = computed(() => ({
-  '--brand-primary': theme.value.primary || '#c95028',
-  '--brand-secondary': theme.value.secondary || '#29231f',
-  '--brand-accent': theme.value.accent || '#f6a623',
-  '--bg-primary': theme.value.background || '#fffaf6',
-  '--bg-card': theme.value.surface || '#ffffff',
-  '--text-primary': theme.value.text || '#29231f',
-  '--radius-md': `${theme.value.radius || 16}px`,
-}))
+
+const rootStyle = computed(() => {
+  if (isMarketplace.value) {
+    return {
+      '--brand-primary': '#c95028',
+      '--brand-secondary': '#29231f',
+      '--brand-accent': '#e06336',
+      '--bg-primary': '#fbf8f3',
+      '--bg-card': '#ffffff',
+      '--text-primary': '#29231f',
+      '--radius-md': '16px',
+    }
+  }
+  return {
+    '--brand-primary': theme.value.primary || '#c95028',
+    '--brand-secondary': theme.value.secondary || '#29231f',
+    '--brand-accent': theme.value.accent || '#f6a623',
+    '--bg-primary': theme.value.background || '#fffaf6',
+    '--bg-card': theme.value.surface || '#ffffff',
+    '--text-primary': theme.value.text || '#29231f',
+    '--radius-md': `${theme.value.radius || 16}px`,
+  }
+})
+
 const requestUrl = useRequestURL()
 const canonical = computed(() => `${requestUrl.protocol}//${requestUrl.host}${route.path === '/' ? '/' : route.path.replace(/\/$/, '')}`)
-const description = computed(() => tenant.value?.brand.identity.tagline || 'Order fresh food or make a reservation online.')
-const socialImage = computed(() => tenant.value?.brand.content.hero_image_url || tenant.value?.brand.identity.logo_url || undefined)
+
+const title = computed(() => {
+  if (isMarketplace.value) {
+    return 'Deliveriano — Discover & Order From Nearby Restaurants in Switzerland'
+  }
+  return tenant.value ? `${tenant.value.brand.identity.name} — Order & Reserve` : 'Restaurant unavailable'
+})
+
+const description = computed(() => {
+  if (isMarketplace.value) {
+    return 'Find independent artisanal pizzerias, sushi bars, and local restaurants near you. Fast delivery and takeaway across Switzerland.'
+  }
+  return tenant.value?.brand.identity.tagline || 'Order fresh food or make a reservation online.'
+})
+
+const socialImage = computed(() => {
+  if (isMarketplace.value) return undefined
+  return tenant.value?.brand.content.hero_image_url || tenant.value?.brand.identity.logo_url || undefined
+})
 
 useSeoMeta({
-  title: () => tenant.value ? `${tenant.value.brand.identity.name} — Order & Reserve` : 'Restaurant unavailable',
+  title,
   description,
-  ogTitle: () => tenant.value?.brand.identity.name,
+  ogTitle: title,
   ogDescription: description,
   ogImage: socialImage,
   ogUrl: canonical,
   ogType: 'website',
   twitterCard: 'summary_large_image',
-  twitterTitle: () => tenant.value?.brand.identity.name,
+  twitterTitle: title,
   twitterDescription: description,
   twitterImage: socialImage,
 })
@@ -37,155 +72,37 @@ useHead({
     { rel: 'manifest', href: '/manifest.webmanifest' },
   ],
   meta: [
-    { name: 'theme-color', content: () => String(theme.value.primary || '#c95028') },
+    { name: 'theme-color', content: () => String(isMarketplace.value ? '#c95028' : (theme.value.primary || '#c95028')) },
   ],
 })
-
-const cart = useTenantCart()
-const mobileOpen = ref(false)
 </script>
 
 <template>
   <div :style="rootStyle" class="nuxt-storefront">
-    <a class="skip-link" href="#main-content">Skip to content</a>
+    <!-- Marketplace Experience -->
+    <template v-if="isMarketplace">
+      <NuxtLayout name="marketplace">
+        <NuxtPage />
+      </NuxtLayout>
+    </template>
 
-    <div v-if="status === 'pending'" class="page-state" role="status">
-      <span class="spinner" />
-      <p>Preparing this restaurant…</p>
-    </div>
-
-    <main v-else-if="error || !tenant" id="main-content" class="page-state boot-error">
-      <span class="state-icon" aria-hidden="true">!</span>
-      <h1>Restaurant unavailable</h1>
-      <p>{{ error?.message || 'This restaurant could not be loaded.' }}</p>
-      <button class="btn primary" @click="() => refresh()">Try again</button>
-    </main>
-
+    <!-- Restaurant Tenant Experience -->
     <template v-else>
-      <!-- Top Announcement / Kitchen Status Strip -->
-      <div class="top-status-bar">
-        <div class="container top-status-inner">
-          <div class="status-left">
-            <span class="online-pulse" />
-            <span>Accepting Delivery & Dine-In Orders</span>
-          </div>
-          <div class="status-right">
-            <span v-if="tenant.restaurant.address"><i class="ri-map-pin-2-line" /> {{ tenant.restaurant.address }}</span>
-            <a v-if="tenant.restaurant.phone" :href="`tel:${tenant.restaurant.phone}`" style="color: inherit; text-decoration: none;"><i class="ri-phone-line" /> {{ tenant.restaurant.phone }}</a>
-            <a v-if="tenant.restaurant.email" :href="`mailto:${tenant.restaurant.email}`" style="color: inherit; text-decoration: none;"><i class="ri-mail-line" /> {{ tenant.restaurant.email }}</a>
-          </div>
-        </div>
+      <div v-if="status === 'pending'" class="page-state" role="status">
+        <span class="spinner" />
+        <p>Preparing this restaurant…</p>
       </div>
 
-      <!-- Main Sticky Header -->
-      <header class="site-header">
-        <div class="container header-inner">
-          <NuxtLink class="logo" to="/" :aria-label="`${tenant.brand.identity.name} home`">
-            <img v-if="tenant.brand.identity.logo_url" :src="tenant.brand.identity.logo_url" alt="" width="44" height="44">
-            <span v-else class="brand-glyph" aria-hidden="true">
-              <i class="ri-restaurant-fill" />
-            </span>
-            <div class="brand-text">
-              <strong class="brand-name">{{ tenant.brand.identity.name }}</strong>
-              <small v-if="tenant.brand.identity.tagline" class="brand-sub">{{ tenant.brand.identity.tagline }}</small>
-            </div>
-          </NuxtLink>
-
-          <button
-            class="menu-toggle"
-            type="button"
-            :aria-expanded="mobileOpen"
-            aria-controls="primary-navigation"
-            @click="mobileOpen = !mobileOpen"
-          >
-            <span class="sr-only">Toggle navigation</span>
-            <i :class="mobileOpen ? 'ri-close-line' : 'ri-menu-line'" />
-          </button>
-
-          <nav
-            id="primary-navigation"
-            :class="['primary-nav', { open: mobileOpen }]"
-            aria-label="Primary navigation"
-          >
-            <NuxtLink
-              v-for="item in tenant.brand.navigation"
-              :key="item.href"
-              :to="tenantHref(item.href)"
-              @click="mobileOpen = false"
-            >
-              {{ item.label }}
-            </NuxtLink>
-            <NuxtLink to="/account" @click="mobileOpen = false">
-              <i class="ri-user-3-line" /> Account
-            </NuxtLink>
-            <NuxtLink class="cart-link" to="/checkout" @click="mobileOpen = false">
-              <i class="ri-shopping-bag-3-line" />
-              <span>Cart</span>
-              <span class="cart-count">{{ cart.count }}</span>
-            </NuxtLink>
-          </nav>
-        </div>
-      </header>
-
-      <main id="main-content">
-        <NuxtPage />
+      <main v-else-if="error || !tenant" id="main-content" class="page-state boot-error">
+        <span class="state-icon" aria-hidden="true">!</span>
+        <h1>Restaurant unavailable</h1>
+        <p>{{ error?.message || 'This restaurant could not be loaded.' }}</p>
+        <button class="btn primary" @click="() => refresh()">Try again</button>
       </main>
 
-      <!-- Enhanced Multi-Column Footer -->
-      <footer class="site-footer">
-        <div class="container footer-content">
-          <div class="footer-grid">
-            <div class="footer-brand-col">
-              <NuxtLink class="footer-logo" to="/">
-                <span class="brand-glyph-sm" aria-hidden="true"><i class="ri-restaurant-fill" /></span>
-                <strong class="footer-brand">{{ tenant.brand.identity.name }}</strong>
-              </NuxtLink>
-              <p class="footer-tagline">{{ tenant.brand.identity.tagline || 'Exquisite dining and freshly prepared culinary favourites.' }}</p>
-              
-              <!-- Social Links -->
-              <div v-if="tenant.settings?.social_links" style="display: flex; gap: 0.75rem; margin: 1rem 0;">
-                <a v-if="tenant.settings.social_links.instagram" :href="tenant.settings.social_links.instagram" target="_blank" rel="noopener noreferrer" aria-label="Instagram" style="color: inherit; font-size: 1.25rem;"><i class="ri-instagram-line" /></a>
-                <a v-if="tenant.settings.social_links.facebook" :href="tenant.settings.social_links.facebook" target="_blank" rel="noopener noreferrer" aria-label="Facebook" style="color: inherit; font-size: 1.25rem;"><i class="ri-facebook-box-line" /></a>
-                <a v-if="tenant.settings.social_links.twitter" :href="tenant.settings.social_links.twitter" target="_blank" rel="noopener noreferrer" aria-label="Twitter / X" style="color: inherit; font-size: 1.25rem;"><i class="ri-twitter-x-line" /></a>
-                <a v-if="tenant.settings.social_links.tiktok" :href="tenant.settings.social_links.tiktok" target="_blank" rel="noopener noreferrer" aria-label="TikTok" style="color: inherit; font-size: 1.25rem;"><i class="ri-tiktok-line" /></a>
-                <a v-if="tenant.settings.social_links.google_maps" :href="tenant.settings.social_links.google_maps" target="_blank" rel="noopener noreferrer" aria-label="Google Maps" style="color: inherit; font-size: 1.25rem;"><i class="ri-map-pin-line" /></a>
-              </div>
-
-              <p class="footer-copy-text">{{ tenant.brand.content.footer_text || `© ${new Date().getFullYear()} ${tenant.brand.identity.name}. All rights reserved.` }}</p>
-            </div>
-
-            <div class="footer-nav-col">
-              <h4>Quick Links</h4>
-              <nav aria-label="Footer navigation">
-                <NuxtLink to="/">Home</NuxtLink>
-                <NuxtLink to="/menu">Our Menu</NuxtLink>
-                <NuxtLink to="/reservations">Reservations</NuxtLink>
-                <NuxtLink to="/locations">Locations & Hours</NuxtLink>
-                <NuxtLink to="/account">My Account</NuxtLink>
-              </nav>
-            </div>
-
-            <div class="footer-info-col">
-              <h4>Contact & Hours</h4>
-              <ul class="footer-info-list">
-                <li v-if="tenant.restaurant.phone"><i class="ri-phone-line" /> {{ tenant.restaurant.phone }}</li>
-                <li v-if="tenant.restaurant.email"><i class="ri-mail-line" /> {{ tenant.restaurant.email }}</li>
-                <li v-if="tenant.restaurant.address"><i class="ri-map-pin-line" /> {{ tenant.restaurant.address }}</li>
-                <li><i class="ri-e-bike-2-line" /> Fast Delivery & Collection</li>
-              </ul>
-            </div>
-          </div>
-
-          <div class="footer-bottom-bar">
-            <p>© {{ new Date().getFullYear() }} {{ tenant.brand.identity.name }}. Handcrafted culinary excellence.</p>
-            <div class="footer-links-inline">
-              <NuxtLink to="/menu">Order Online</NuxtLink>
-              <span>•</span>
-              <NuxtLink to="/reservations">Reservations</NuxtLink>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <NuxtLayout v-else name="restaurant">
+        <NuxtPage />
+      </NuxtLayout>
     </template>
   </div>
 </template>

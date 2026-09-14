@@ -57,7 +57,7 @@ cat > "${NGINX_SITE}" <<'NGINX'
 server {
     listen 80;
     listen [::]:80;
-    server_name deliveriano.ch;
+    server_name deliveriano.ch *.deliveriano.ch;
 
     location / {
         proxy_pass http://127.0.0.1:3000;

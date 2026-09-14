@@ -1,21 +1,23 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
+import { useIsMarketplace, useActiveTenant, tenantHref } from '~/composables/useTenant'
 import type { MenuItem, Category } from '~/types/storefront'
+import MarketplaceView from '~/components/discovery/MarketplaceView.vue'
 
+const isMarketplace = useIsMarketplace()
 const tenant = useActiveTenant()
 const brand = computed<any>(() => tenant.value?.brand || {})
-const sections = computed(() => {
-  const list = brand.value?.sections || []
-  return [...list].filter((s: any) => s.visible).sort((a: any, b: any) => a.position - b.position)
-})
 
 const headers = useStorefrontHeaders()
-const { data: menuData, error, refresh, status } = await useFetch<{ data: MenuItem[] }>('/api/v1/storefront/menus?limit=12', { headers })
-const { data: categories } = await useFetch<{ data: Category[] }>('/api/v1/storefront/categories?limit=12', { headers })
+const { data: menuData, error, refresh, status } = await useFetch<{ data: MenuItem[] }>('/api/v1/storefront/menus?limit=12', {
+  headers,
+  immediate: !isMarketplace.value,
+})
+const { data: categories } = await useFetch<{ data: Category[] }>('/api/v1/storefront/categories?limit=12', {
+  headers,
+  immediate: !isMarketplace.value,
+})
 
 const cart = useTenantCart()
-const has = (type: string) => sections.value.some((section: any) => section.type === type)
-
-// Interactive category filter on the home page
 const selectedCategoryId = ref<number | null>(null)
 
 const filteredMenu = computed(() => {
@@ -33,319 +35,511 @@ function selectCategory(id: number | null) {
   selectedCategoryId.value = id
 }
 
-const currencyCode = computed(() => tenant.value?.currency?.code || 'USD')
+const currencyCode = computed(() => tenant.value?.currency?.code || 'CHF')
+
+// Story content
+const restaurantStory = computed(() => {
+  return brand.value?.content?.about_story ||
+    tenant.value?.restaurant?.listing_description ||
+    brand.value?.content?.hero_subtitle ||
+    brand.value?.identity?.tagline ||
+    null
+})
+
+const coverPhoto = computed(() => {
+  return brand.value?.content?.hero_image_url || null
+})
 </script>
 
 <template>
-  <div class="home-page">
-    <!-- Hero Section -->
-    <section v-if="has('hero')" class="home-hero">
-      <div class="container hero-grid">
-        <div class="hero-copy">
-          <div class="hero-kicker-wrap">
-            <span class="hero-badge">
-              <i class="ri-sparkling-fill" />
-              {{ brand.identity?.tagline || 'Made fresh for you' }}
-            </span>
+  <div>
+    <!-- 1. MARKETPLACE EXPERIENCE (deliveriano.ch) -->
+    <template v-if="isMarketplace">
+      <MarketplaceView />
+    </template>
+
+    <!-- 2. RESTAURANT SUBDOMAIN EXPERIENCE -->
+    <div v-else-if="tenant" class="restaurant-home">
+      <!-- Restaurant Cover & Hero Section -->
+      <section class="restaurant-hero">
+        <div v-if="coverPhoto" class="hero-cover-bg" :style="{ backgroundImage: `url(${coverPhoto})` }">
+          <div class="hero-cover-overlay" />
+        </div>
+        <div v-else class="hero-cover-fallback" />
+
+        <div class="container hero-inner">
+          <div class="hero-card-surface">
+            <div class="restaurant-identity-header">
+              <img
+                v-if="brand.identity?.logo_url"
+                :src="brand.identity.logo_url"
+                :alt="`${tenant.restaurant.name} logo`"
+                class="restaurant-logo-lg"
+              />
+              <div v-else class="restaurant-logo-placeholder">
+                <i class="ri-restaurant-2-fill" />
+              </div>
+
+              <div class="restaurant-titles">
+                <h1 class="restaurant-display-name">{{ tenant.restaurant.name }}</h1>
+                <p v-if="brand.identity?.tagline" class="restaurant-display-sub">
+                  {{ brand.identity.tagline }}
+                </p>
+                <div v-if="tenant.restaurant.address" class="restaurant-location-info">
+                  <i class="ri-map-pin-2-line" />
+                  <span>{{ tenant.restaurant.address }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="hero-actions-row">
+              <NuxtLink class="btn primary hero-action-btn" :to="tenantHref('/menu')">
+                <i class="ri-restaurant-line" />
+                <span>Browse Menu & Order</span>
+              </NuxtLink>
+              <NuxtLink
+                v-if="tenant.capabilities?.reservations"
+                class="btn outline hero-action-btn"
+                :to="tenantHref('/reservations')"
+              >
+                <i class="ri-calendar-line" />
+                <span>Reserve a Table</span>
+              </NuxtLink>
+            </div>
           </div>
+        </div>
+      </section>
 
-          <h1 class="hero-title">
-            {{ brand.content?.hero_title || 'Restaurant-quality food, on your schedule.' }}
-          </h1>
-
-          <p class="hero-subtitle">
-            {{ brand.content?.hero_subtitle || 'Order freshly prepared favourites or reserve your visit with ease.' }}
-          </p>
-
-          <div class="hero-actions">
-            <NuxtLink class="btn primary hero-btn-main" to="/menu">
-              <span>Explore full menu</span>
+      <!-- Menu Categories Exploration Section -->
+      <section v-if="categories?.data?.length" class="section categories-section">
+        <div class="container">
+          <div class="section-headline">
+            <div>
+              <span class="section-kicker">Our Selection</span>
+              <h2>Menu Categories</h2>
+            </div>
+            <NuxtLink class="section-link-action" :to="tenantHref('/menu')">
+              <span>View full menu</span>
               <i class="ri-arrow-right-line" />
             </NuxtLink>
-            <NuxtLink class="btn outline hero-btn-sub" to="/reservations">
-              <i class="ri-calendar-line" />
-              <span>Make a reservation</span>
-            </NuxtLink>
           </div>
 
-          <!-- Quick Metrics Strip -->
-          <div class="hero-metrics">
-            <div class="metric-item">
-              <div class="metric-icon"><i class="ri-star-smile-fill" /></div>
-              <div>
-                <strong>4.9 / 5</strong>
-                <span>Top Customer Rating</span>
-              </div>
+          <div class="category-chips-bar">
+            <button
+              class="category-chip"
+              :class="{ active: selectedCategoryId === null }"
+              type="button"
+              @click="selectCategory(null)"
+            >
+              <i class="ri-apps-2-line" />
+              <span>All Dishes</span>
+            </button>
+            <button
+              v-for="category in categories.data"
+              :key="category.id"
+              class="category-chip"
+              :class="{ active: selectedCategoryId === category.id }"
+              type="button"
+              @click="selectCategory(category.id)"
+            >
+              <span>{{ category.name }}</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Featured / Popular Dishes Section (Real items) -->
+      <section class="section surface-section featured-menu-section">
+        <div class="container">
+          <div class="section-headline">
+            <div>
+              <span class="section-kicker">Fresh from the kitchen</span>
+              <h2>Popular Dishes</h2>
             </div>
-            <div class="metric-divider" />
-            <div class="metric-item">
-              <div class="metric-icon"><i class="ri-time-line" /></div>
-              <div>
-                <strong>25–35 min</strong>
-                <span>Average Prep & Delivery</span>
-              </div>
+            <div class="section-headline-meta">
+              <span class="item-count-badge">{{ filteredMenu.length }} available</span>
+              <NuxtLink :to="tenantHref('/menu')" class="subtle-link">See all menu items →</NuxtLink>
             </div>
-            <div class="metric-divider" />
-            <div class="metric-item">
-              <div class="metric-icon"><i class="ri-leaf-line" /></div>
-              <div>
-                <strong>100% Fresh</strong>
-                <span>Artisan Ingredients</span>
+          </div>
+
+          <AsyncState
+            :loading="status === 'pending'"
+            :error="error?.message"
+            :empty="!filteredMenu?.length"
+            empty-title="No dishes found in this category"
+            empty-text="Try selecting another category or browse our full menu."
+            @retry="refresh"
+          >
+            <div class="home-menu-grid">
+              <MenuCard
+                v-for="item in filteredMenu"
+                :key="item.id"
+                :item="item"
+                :currency="currencyCode"
+                @add="cart.add"
+              />
+            </div>
+
+            <div class="menu-bottom-cta">
+              <NuxtLink class="btn secondary menu-cta-btn" :to="tenantHref('/menu')">
+                <span>View all available dishes</span>
+                <i class="ri-arrow-right-line" />
+              </NuxtLink>
+            </div>
+          </AsyncState>
+        </div>
+      </section>
+
+      <!-- Owner-Written Story / About Section -->
+      <section v-if="restaurantStory" class="section story-section">
+        <div class="container">
+          <div class="story-card">
+            <span class="section-kicker">Our Story</span>
+            <h2>Crafted with passion in Switzerland</h2>
+            <p class="story-paragraph">{{ restaurantStory }}</p>
+
+            <div class="story-meta-row">
+              <div class="story-meta-item">
+                <i class="ri-heart-3-line" />
+                <span>Authentic local recipe preparation</span>
+              </div>
+              <div class="story-meta-item">
+                <i class="ri-shield-check-line" />
+                <span>Fresh quality ingredients</span>
               </div>
             </div>
           </div>
         </div>
+      </section>
 
-        <!-- Hero Visual Showcase -->
-        <div class="hero-visual-wrapper">
-          <div
-            v-if="brand.content?.hero_image_url"
-            class="hero-visual has-image"
-            :style="{ backgroundImage: `url(${brand.content.hero_image_url})` }"
-          >
-            <div class="hero-status-pill">
-              <span class="status-dot" />
-              <span>Kitchen open & taking orders</span>
+      <!-- Location, Opening & Contact Section -->
+      <section class="section contact-hours-section">
+        <div class="container">
+          <div class="contact-hours-grid">
+            <div class="info-panel">
+              <span class="section-kicker">Visit Us</span>
+              <h2>Location & Contact</h2>
+              <ul class="contact-info-list">
+                <li v-if="tenant.restaurant.address">
+                  <i class="ri-map-pin-2-fill text-primary" />
+                  <div>
+                    <strong>Address</strong>
+                    <p>{{ tenant.restaurant.address }}</p>
+                  </div>
+                </li>
+                <li v-if="tenant.restaurant.phone">
+                  <i class="ri-phone-fill text-primary" />
+                  <div>
+                    <strong>Phone</strong>
+                    <p><a :href="`tel:${tenant.restaurant.phone}`">{{ tenant.restaurant.phone }}</a></p>
+                  </div>
+                </li>
+                <li v-if="tenant.restaurant.email">
+                  <i class="ri-mail-fill text-primary" />
+                  <div>
+                    <strong>Email</strong>
+                    <p><a :href="`mailto:${tenant.restaurant.email}`">{{ tenant.restaurant.email }}</a></p>
+                  </div>
+                </li>
+              </ul>
             </div>
-          </div>
 
-          <div v-else class="hero-visual showcase-card">
-            <div class="visual-glow-backdrop" />
-            <div class="showcase-content">
-              <div class="showcase-top-badge">
-                <i class="ri-restaurant-2-fill" />
-                <span>Today's Chef Selection</span>
-              </div>
-
-              <div class="showcase-dish-preview">
-                <div class="dish-illustration">
-                  <i class="ri-bowl-fill" />
+            <div class="hours-panel">
+              <span class="section-kicker">Service</span>
+              <h2>Ordering & Fulfilment</h2>
+              <div class="fulfilment-features">
+                <div class="fulfilment-card">
+                  <i class="ri-e-bike-2-fill text-primary" />
+                  <div>
+                    <strong>Delivery Service</strong>
+                    <p>Hot and freshly prepared meals delivered directly to your door.</p>
+                  </div>
                 </div>
-                <div class="dish-info">
-                  <h3>Special Catfish & Rice Deluxe</h3>
-                  <p>Slow cooked in aromatic sauce, served fresh</p>
-                  <div class="dish-meta">
-                    <span class="dish-price">$13.99</span>
-                    <NuxtLink to="/menu" class="dish-order-link">Order now →</NuxtLink>
+                <div class="fulfilment-card">
+                  <i class="ri-store-2-fill text-primary" />
+                  <div>
+                    <strong>Takeaway & Collection</strong>
+                    <p>Order ahead online and collect promptly without waiting.</p>
                   </div>
                 </div>
               </div>
-
-              <!-- Floating Micro-Badges -->
-              <div class="floating-badge badge-top-right">
-                <i class="ri-fire-fill text-accent" />
-                <div>
-                  <strong>Freshly Prepared</strong>
-                  <small>Cooked to order</small>
-                </div>
-              </div>
-
-              <div class="floating-badge badge-bottom-left">
-                <i class="ri-takeaway-fill text-primary" />
-                <div>
-                  <strong>Instant Dine-in & Delivery</strong>
-                  <small>Zero waiting fees</small>
-                </div>
-              </div>
             </div>
           </div>
         </div>
-      </div>
-    </section>
-
-    <!-- Pillars / Why Us Section -->
-    <section class="section service-pillars-section">
-      <div class="container">
-        <div class="pillars-grid">
-          <div class="pillar-card">
-            <div class="pillar-icon-box">
-              <i class="ri-restaurant-line" />
-            </div>
-            <div class="pillar-text">
-              <h3>Artisan Culinary Craft</h3>
-              <p>Authentic recipes perfected daily using rich seasonings and quality farm produce.</p>
-            </div>
-          </div>
-
-          <div class="pillar-card">
-            <div class="pillar-icon-box">
-              <i class="ri-e-bike-2-line" />
-            </div>
-            <div class="pillar-text">
-              <h3>Hot & Fast Delivery</h3>
-              <p>Carefully packaged meals delivered with utmost speed and temperature retention.</p>
-            </div>
-          </div>
-
-          <div class="pillar-card">
-            <div class="pillar-icon-box">
-              <i class="ri-calendar-check-line" />
-            </div>
-            <div class="pillar-text">
-              <h3>Instant Booking</h3>
-              <p>Plan intimate dinners or group gatherings with hassle-free live confirmation.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Category Exploration Section -->
-    <section v-if="has('categories')" class="section categories-section">
-      <div class="container">
-        <div class="section-headline">
-          <div>
-            <span class="section-kicker">Menu Explorer</span>
-            <h2>Find your favourite dish</h2>
-          </div>
-          <NuxtLink class="section-link-action" to="/menu">
-            <span>View full menu</span>
-            <i class="ri-arrow-right-line" />
-          </NuxtLink>
-        </div>
-
-        <!-- Filter Chips Bar -->
-        <div class="category-chips-bar">
-          <button
-            class="category-chip"
-            :class="{ active: selectedCategoryId === null }"
-            type="button"
-            @click="selectCategory(null)"
-          >
-            <i class="ri-apps-2-line" />
-            <span>All Favourites</span>
-          </button>
-          <button
-            v-for="category in categories?.data"
-            :key="category.id"
-            class="category-chip"
-            :class="{ active: selectedCategoryId === category.id }"
-            type="button"
-            @click="selectCategory(category.id)"
-          >
-            <i class="ri-restaurant-2-line" />
-            <span>{{ category.name }}</span>
-          </button>
-        </div>
-      </div>
-    </section>
-
-    <!-- Popular / Featured Dishes Grid Section -->
-    <section v-if="has('featured_dishes')" class="section surface-section featured-menu-section">
-      <div class="container">
-        <div class="section-headline">
-          <div>
-            <span class="section-kicker">From our kitchen</span>
-            <h2>Popular right now</h2>
-          </div>
-          <div class="section-headline-meta">
-            <span class="item-count-badge">{{ filteredMenu.length }} available</span>
-            <NuxtLink to="/menu" class="subtle-link">See all menu items →</NuxtLink>
-          </div>
-        </div>
-
-        <AsyncState
-          :loading="status === 'pending'"
-          :error="error?.message"
-          :empty="!filteredMenu?.length"
-          empty-title="No dishes found in this category"
-          empty-text="Try selecting another category or browse our full menu."
-          @retry="refresh"
-        >
-          <div class="home-menu-grid">
-            <MenuCard
-              v-for="item in filteredMenu"
-              :key="item.id"
-              :item="item"
-              :currency="currencyCode"
-              @add="cart.add"
-            />
-          </div>
-
-          <div class="menu-bottom-cta">
-            <NuxtLink class="btn secondary menu-cta-btn" to="/menu">
-              <span>View all available dishes</span>
-              <i class="ri-arrow-right-line" />
-            </NuxtLink>
-          </div>
-        </AsyncState>
-      </div>
-    </section>
-
-    <!-- Experience / How It Works Journey -->
-    <section class="section experience-section">
-      <div class="container">
-        <div class="centered-headline">
-          <span class="section-kicker">Effortless Dining</span>
-          <h2>How it works</h2>
-          <p>From menu selection to first bite, dining with us is smooth and memorable.</p>
-        </div>
-
-        <div class="journey-steps-grid">
-          <div class="step-card">
-            <div class="step-badge">01</div>
-            <div class="step-icon-wrap">
-              <i class="ri-book-open-line" />
-            </div>
-            <h3>Discover & Choose</h3>
-            <p>Explore our carefully crafted menu featuring authentic dishes, salads, appetizers, and chef specials.</p>
-          </div>
-
-          <div class="step-card">
-            <div class="step-badge">02</div>
-            <div class="step-icon-wrap">
-              <i class="ri-shopping-cart-2-line" />
-            </div>
-            <h3>Order or Reserve</h3>
-            <p>Customize your food order for fast delivery or reserve your visit in just a few simple taps.</p>
-          </div>
-
-          <div class="step-card">
-            <div class="step-badge">03</div>
-            <div class="step-icon-wrap">
-              <i class="ri-emotion-happy-line" />
-            </div>
-            <h3>Savour Every Bite</h3>
-            <p>Enjoy piping-hot meals prepared fresh from our kitchen, served with warm hospitality.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Reservation CTA Banner -->
-    <section v-if="has('reservation_cta')" class="section reservation-cta-section">
-      <div class="container">
-        <div class="reservation-card-banner">
-          <div class="banner-ambient-glow" />
-          <div class="banner-content">
-            <span class="banner-kicker">
-              <i class="ri-vip-crown-2-line" />
-              Make it a moment
-            </span>
-            <h2>We are ready to welcome you.</h2>
-            <p>
-              Whether you are planning a relaxed dinner, family gathering, or romantic date night,
-              let our kitchen take care of the rest.
-            </p>
-
-            <ul class="banner-features-list">
-              <li><i class="ri-checkbox-circle-fill" /> Instant real-time confirmation</li>
-              <li><i class="ri-checkbox-circle-fill" /> No booking or cancellation fees</li>
-              <li><i class="ri-checkbox-circle-fill" /> Dietary & special requests welcome</li>
-            </ul>
-
-            <div class="banner-actions">
-              <NuxtLink class="btn primary banner-primary-btn" to="/reservations">
-                <span>Make a reservation now</span>
-                <i class="ri-arrow-right-line" />
-              </NuxtLink>
-              <NuxtLink class="btn outline banner-secondary-btn" to="/locations">
-                <span>View locations & hours</span>
-              </NuxtLink>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
+      </section>
+    </div>
   </div>
 </template>
+
+<style scoped>
+.restaurant-hero {
+  position: relative;
+  min-height: 380px;
+  display: flex;
+  align-items: flex-end;
+  padding-bottom: 2.5rem;
+  background-color: #29231f;
+}
+
+.hero-cover-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+}
+
+.hero-cover-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(41, 35, 31, 0.2) 0%, rgba(41, 35, 31, 0.75) 100%);
+}
+
+.hero-cover-fallback {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 70% 30%, #3e332c 0%, #201a17 100%);
+}
+
+.hero-inner {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+}
+
+.hero-card-surface {
+  background-color: #ffffff;
+  border-radius: 20px;
+  padding: 2rem;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.restaurant-identity-header {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex: 1;
+  min-width: 280px;
+}
+
+.restaurant-logo-lg {
+  width: 80px;
+  height: 80px;
+  border-radius: 16px;
+  object-fit: cover;
+  border: 1px solid #f0e9e1;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.restaurant-logo-placeholder {
+  width: 80px;
+  height: 80px;
+  border-radius: 16px;
+  background-color: #f7f3ee;
+  color: var(--brand-primary, #c95028);
+  font-size: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.restaurant-display-name {
+  margin: 0 0 0.25rem;
+  font-family: 'Playfair Display', serif;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #29231f;
+}
+
+.restaurant-display-sub {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: #665c52;
+}
+
+.restaurant-location-info {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+  color: #787067;
+}
+
+.hero-actions-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.hero-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.85rem 1.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: 12px;
+}
+
+/* Story Section */
+.story-section {
+  padding: 4rem 0;
+  background-color: #fffaf6;
+}
+
+.story-card {
+  max-width: 800px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.story-card h2 {
+  font-family: 'Playfair Display', serif;
+  font-size: 2rem;
+  margin: 0 0 1.25rem;
+  color: #29231f;
+}
+
+.story-paragraph {
+  font-size: 1.125rem;
+  line-height: 1.8;
+  color: #595048;
+  margin-bottom: 2rem;
+}
+
+.story-meta-row {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+.story-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: var(--brand-primary, #c95028);
+  font-size: 0.9rem;
+}
+
+/* Contact & Hours Section */
+.contact-hours-section {
+  padding: 4rem 0;
+}
+
+.contact-hours-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2.5rem;
+}
+
+.info-panel, .hours-panel {
+  background-color: #ffffff;
+  border: 1px solid #f0e9e1;
+  border-radius: 20px;
+  padding: 2rem;
+}
+
+.info-panel h2, .hours-panel h2 {
+  margin: 0 0 1.5rem;
+  font-size: 1.5rem;
+  color: #29231f;
+}
+
+.contact-info-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.contact-info-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.contact-info-list i {
+  font-size: 1.25rem;
+  color: var(--brand-primary, #c95028);
+  margin-top: 0.2rem;
+}
+
+.contact-info-list strong {
+  display: block;
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #8c8278;
+  margin-bottom: 0.2rem;
+}
+
+.contact-info-list p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #29231f;
+}
+
+.contact-info-list a {
+  color: inherit;
+  text-decoration: none;
+}
+.contact-info-list a:hover {
+  text-decoration: underline;
+}
+
+.fulfilment-features {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.fulfilment-card {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+  background-color: #fffaf6;
+  border-radius: 12px;
+  border: 1px solid #f7ece2;
+}
+
+.fulfilment-card i {
+  font-size: 1.5rem;
+  color: var(--brand-primary, #c95028);
+}
+
+.fulfilment-card strong {
+  display: block;
+  font-size: 0.95rem;
+  color: #29231f;
+  margin-bottom: 0.25rem;
+}
+
+.fulfilment-card p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #665c52;
+  line-height: 1.5;
+}
+
+@media (max-width: 768px) {
+  .contact-hours-grid {
+    grid-template-columns: 1fr;
+  }
+  .hero-card-surface {
+    padding: 1.25rem;
+  }
+  .restaurant-identity-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+}
+</style>

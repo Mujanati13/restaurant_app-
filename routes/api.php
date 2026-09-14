@@ -40,6 +40,7 @@ use App\Http\Controllers\Platform\PlatformOperationsController;
 use App\Http\Controllers\Platform\SupportImpersonationController;
 use App\Http\Controllers\Platform\MobilePushController;
 use App\Http\Controllers\Platform\HealthController;
+use App\Http\Controllers\Platform\DiscoveryController;
 use Igniter\Api\Http\Middleware\Authenticate;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -90,6 +91,13 @@ Route::prefix('v1')->group(function (): void {
     Route::post('builds/callback', BuildCompilerCallbackController::class)->middleware('throttle:120,1');
     Route::post('owner/support-session/exchange', [SupportImpersonationController::class, 'exchange'])
         ->middleware(['restaurant', 'throttle:6,1']);
+
+    Route::prefix('discovery')->middleware('throttle:60,1')->group(function (): void {
+        Route::get('restaurants', [DiscoveryController::class, 'restaurants']);
+        Route::get('address-lookup', [DiscoveryController::class, 'addressLookup']);
+        Route::get('reverse-lookup', [DiscoveryController::class, 'reverseLookup']);
+        Route::get('cuisines', [DiscoveryController::class, 'cuisines']);
+    });
 
     Route::prefix('storefront')->middleware(['restaurant', 'throttle:vondo-storefront'])->group(function (): void {
         Route::get('bootstrap', [StorefrontTenantController::class, 'bootstrap']);
