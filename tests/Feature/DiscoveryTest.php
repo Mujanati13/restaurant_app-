@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Platform\Models\Restaurant;
 use App\Platform\Models\RestaurantBrandRevision;
 use App\Platform\Models\RestaurantDomain;
+use App\Platform\Models\RestaurantLocationSetting;
 use App\Platform\Models\RestaurantMembership;
 use App\Platform\Models\RestaurantSetting;
 use Igniter\Cart\Models\Category;
@@ -70,19 +71,22 @@ class DiscoveryTest extends TestCase
             'is_default' => true,
         ]);
 
-        RestaurantSetting::query()->create([
+        RestaurantLocationSetting::query()->create([
             'restaurant_id' => $this->restaurantZurich->getKey(),
-            'key' => 'min_delivery_order:' . $this->locationZurich->getKey(),
+            'location_id' => $this->locationZurich->getKey(),
+            'key' => 'min_delivery_order',
             'value' => 25.0,
         ]);
-        RestaurantSetting::query()->create([
+        RestaurantLocationSetting::query()->create([
             'restaurant_id' => $this->restaurantZurich->getKey(),
-            'key' => 'delivery_charge:' . $this->locationZurich->getKey(),
+            'location_id' => $this->locationZurich->getKey(),
+            'key' => 'delivery_charge',
             'value' => 3.5,
         ]);
-        RestaurantSetting::query()->create([
+        RestaurantLocationSetting::query()->create([
             'restaurant_id' => $this->restaurantZurich->getKey(),
-            'key' => 'delivery_radius_km:' . $this->locationZurich->getKey(),
+            'location_id' => $this->locationZurich->getKey(),
+            'key' => 'delivery_radius_km',
             'value' => 15.0,
         ]);
 
@@ -173,6 +177,8 @@ class DiscoveryTest extends TestCase
         $this->assertEquals($this->restaurantZurich->slug, $data[0]['slug']);
         $this->assertNotNull($data[0]['selected_location']['distance_km']);
         $this->assertLessThan(1.0, (float)$data[0]['selected_location']['distance_km']);
+        $this->assertSame(3.5, (float)$data[0]['selected_location']['delivery_charge']);
+        $this->assertSame(25.0, (float)$data[0]['selected_location']['min_delivery_order']);
     }
 
     public function test_discovery_cuisine_filter(): void

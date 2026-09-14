@@ -102,12 +102,13 @@ class DiscoveryController extends Controller
 
             foreach ($locations as $loc) {
                 $locId = (int)$loc->getKey();
+                $restaurantId = (int)$restaurant->getKey();
                 $locLat = (float)$loc->location_lat;
                 $locLng = (float)$loc->location_lng;
 
                 // Fulfilment capability check
-                $offersDelivery = $restaurant->settings->boolean('delivery_enabled', true, $locId);
-                $offersCollection = $restaurant->settings->boolean('collection_enabled', true, $locId);
+                $offersDelivery = $this->settings->booleanForRestaurant($restaurantId, 'delivery_enabled', true, $locId);
+                $offersCollection = $this->settings->booleanForRestaurant($restaurantId, 'collection_enabled', true, $locId);
 
                 if ($orderType === 'delivery' && !$offersDelivery) {
                     continue;
@@ -123,7 +124,7 @@ class DiscoveryController extends Controller
                     $distanceKm = $this->calculateHaversineDistance($latitude, $longitude, $locLat, $locLng);
 
                     if ($orderType === 'delivery') {
-                        $maxRadius = (float)$restaurant->settings->get('delivery_radius_km', 10.0, $locId);
+                        $maxRadius = (float)$this->settings->getForRestaurant($restaurantId, 'delivery_radius_km', 10.0, $locId);
                         // Check delivery areas if configured
                         if ($loc->delivery_areas->isNotEmpty()) {
                             $coords = new Coordinates($latitude, $longitude);
@@ -195,10 +196,11 @@ class DiscoveryController extends Controller
                 $isOpen = true;
             }
 
-            $prepTime = (int)$restaurant->settings->integer('prep_time_minutes', 20, $locationId);
-            $deliveryLeadTime = (int)$restaurant->settings->integer('delivery_lead_time_minutes', 35, $locationId);
-            $deliveryCharge = (float)$restaurant->settings->get('delivery_charge', 0.0, $locationId);
-            $minDeliveryOrder = (float)$restaurant->settings->get('min_delivery_order', 0.0, $locationId);
+            $restaurantId = (int)$restaurant->getKey();
+            $prepTime = $this->settings->integerForRestaurant($restaurantId, 'prep_time_minutes', 20, $locationId);
+            $deliveryLeadTime = $this->settings->integerForRestaurant($restaurantId, 'delivery_lead_time_minutes', 35, $locationId);
+            $deliveryCharge = (float)$this->settings->getForRestaurant($restaurantId, 'delivery_charge', 0.0, $locationId);
+            $minDeliveryOrder = (float)$this->settings->getForRestaurant($restaurantId, 'min_delivery_order', 0.0, $locationId);
 
             $results->push([
                 'id' => $restaurant->public_id,
