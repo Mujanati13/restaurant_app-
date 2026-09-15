@@ -80,10 +80,10 @@ class OwnerRestaurantController extends Controller
             'timezone' => ['sometimes', 'required', 'timezone'],
             'currency_code' => ['sometimes', 'required', 'string', 'size:3'],
             'discovery_enabled' => ['sometimes', 'boolean'],
-            'cuisine_tags' => ['sometimes', 'array'],
+            'cuisine_tags' => ['sometimes', 'array', 'max:12'],
             'cuisine_tags.*' => ['string', 'max:50'],
             'listing_description' => ['sometimes', 'nullable', 'string', 'max:1000'],
-            'cover_photo_url' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'cover_photo_url' => ['sometimes', 'nullable', 'url:http,https', 'max:500'],
             'settings' => ['sometimes', 'array'],
         ]);
 

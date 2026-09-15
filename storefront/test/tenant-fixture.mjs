@@ -25,6 +25,22 @@ const menus = { data: [
 
 createServer((request, response) => {
   const url = new URL(request.url || '/', 'http://fixture.local')
+  if (url.pathname.endsWith('/discovery/address-lookup')) {
+    if (mode === 'address-error') return json(response, 503, { message: 'Address search is unavailable. Please use your location.' })
+    return json(response, 200, { data: [{ formatted_address: 'Test address, Zurich', latitude: 47.37, longitude: 8.54, country: 'CH' }] })
+  }
+  if (url.pathname.endsWith('/discovery/cuisines')) return json(response, 200, { data: [{ name: 'Moroccan', slug: 'moroccan', restaurant_count: 1 }] })
+  if (url.pathname.endsWith('/discovery/restaurants')) {
+    if (mode === 'content-error') return json(response, 503, { message: 'Fixture discovery unavailable' })
+    const restaurant = { id: '01fixturetenant', slug: 'saffron-table', name: 'Saffron Table', cuisine_tags: ['Moroccan'],
+      listing_description: 'Seasonal plates and a warm welcome.', cover_photo_url: null, logo_url: null,
+      subdomain_url: 'https://saffron-table.deliveriano.ch', currency_code: 'CHF', currency_symbol: 'CHF ',
+      selected_location: { id: 7, name: 'Saffron Table', address: 'Zurich', latitude: 47.37, longitude: 8.54,
+        distance_km: url.searchParams.has('latitude') ? 1.2 : null, delivery_charge: 3, min_delivery_order: 20,
+        estimated_minutes: 35, offer_delivery: true, offer_collection: true, is_open: null } }
+    return json(response, 200, { data: mode === 'empty' ? [] : [restaurant],
+      meta: { total: mode === 'empty' ? 0 : 1, page: 1, last_page: 1, limit: 12 } })
+  }
   if (url.pathname === '/__fixture/mode') {
     mode = url.searchParams.get('value') || 'happy'
     return json(response, 200, { mode })
@@ -34,7 +50,9 @@ createServer((request, response) => {
   if (mode === 'content-error' && url.pathname.endsWith('/storefront/menus')) return json(response, 503, { message: 'Fixture catalog unavailable' })
   if (url.pathname.endsWith('/storefront/menus')) return json(response, 200, mode === 'empty' ? { data: [] } : menus)
   if (url.pathname.endsWith('/storefront/categories')) return json(response, 200, mode === 'empty' ? { data: [] } : categories)
-  if (url.pathname.endsWith('/storefront/locations')) return json(response, 200, { data: [] })
+  if (url.pathname.endsWith('/storefront/locations')) return json(response, 200, { data: [
+    { id: 7, name: 'Saffron Table', address: 'Zurich', offer_delivery: true, offer_collection: true, is_default: true }
+  ] })
   return json(response, 404, { message: 'Fixture route not found', path: url.pathname })
 }).listen(4010, '127.0.0.1', () => process.stdout.write('Tenant fixture listening on 4010\n'))
 

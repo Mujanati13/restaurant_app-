@@ -3,7 +3,7 @@ import { useDiscovery } from '~/composables/useDiscovery'
 import AddressModal from '~/components/discovery/AddressModal.vue'
 
 const { selectedAddress, isAddressModalOpen } = useDiscovery()
-const cart = useTenantCart()
+const portalUrl = useRuntimeConfig().public.ownerPortalUrl as string
 const mobileNavOpen = ref(false)
 </script>
 
@@ -33,21 +33,12 @@ const mobileNavOpen = ref(false)
           @click="isAddressModalOpen = true"
         >
           <i class="ri-map-pin-2-fill pill-pin" />
-          <span class="pill-address">{{ selectedAddress }}</span>
+          <span class="pill-address">{{ selectedAddress || 'Choose your address' }}</span>
           <i class="ri-arrow-down-s-line pill-arrow" />
         </button>
 
         <!-- Right Actions -->
-        <div class="header-actions">
-          <NuxtLink to="/account" class="header-link">
-            <i class="ri-user-3-line" />
-            <span class="nav-text">Account</span>
-          </NuxtLink>
-          <NuxtLink to="/checkout" class="header-cart-btn" aria-label="Shopping bag">
-            <i class="ri-shopping-bag-3-line" />
-            <span v-if="cart.count.value > 0" class="cart-badge">{{ cart.count }}</span>
-          </NuxtLink>
-        </div>
+        <div class="header-actions"><a :href="portalUrl" class="header-link">For restaurants <i class="ri-arrow-right-up-line" /></a></div>
       </div>
     </header>
 
@@ -79,21 +70,21 @@ const mobileNavOpen = ref(false)
           <div class="footer-links-col">
             <h4>Popular Cities</h4>
             <ul>
-              <li><button type="button" class="city-link" @click="() => { selectedAddress = 'Bahnhofstrasse 1, Zürich'; isAddressModalOpen = false }">Zürich</button></li>
-              <li><button type="button" class="city-link" @click="() => { selectedAddress = 'Rue du Rhône 42, Genève'; isAddressModalOpen = false }">Genève</button></li>
-              <li><button type="button" class="city-link" @click="() => { selectedAddress = 'Freie Strasse 15, Basel'; isAddressModalOpen = false }">Basel</button></li>
-              <li><button type="button" class="city-link" @click="() => { selectedAddress = 'Kramgasse 20, Bern'; isAddressModalOpen = false }">Bern</button></li>
-              <li><button type="button" class="city-link" @click="() => { selectedAddress = 'Place Saint-François 5, Lausanne'; isAddressModalOpen = false }">Lausanne</button></li>
+              <li><button type="button" class="city-link" @click="isAddressModalOpen = true">Zürich</button></li>
+              <li><button type="button" class="city-link" @click="isAddressModalOpen = true">Genève</button></li>
+              <li><button type="button" class="city-link" @click="isAddressModalOpen = true">Basel</button></li>
+              <li><button type="button" class="city-link" @click="isAddressModalOpen = true">Bern</button></li>
+              <li><button type="button" class="city-link" @click="isAddressModalOpen = true">Lausanne</button></li>
             </ul>
           </div>
 
           <div class="footer-links-col">
             <h4>For Partners</h4>
             <ul>
-              <li><a href="/vondo-admin" target="_blank" rel="noopener noreferrer">Restaurant Portal</a></li>
-              <li><a href="#partner">Partner With Us</a></li>
-              <li><a href="#drivers">Courier Network</a></li>
-              <li><a href="#support">Partner Support</a></li>
+              <li><a :href="portalUrl" target="_blank" rel="noopener noreferrer">Restaurant Portal</a></li>
+              
+              
+              
             </ul>
           </div>
         </div>

@@ -57,8 +57,7 @@ export function useTenantSlug() {
     }
 
     // 4. Custom domain or legacy cookie on restaurant pages
-    const restaurantCookie = useCookie<string | null>('vondo-restaurant')
-    return restaurantCookie.value || null
+    return null
   })
 }
 
@@ -118,9 +117,11 @@ export function useActiveTenant() {
 }
 
 export function useStorefrontHeaders() {
-  return import.meta.server
-    ? useRequestHeaders(['host', 'x-forwarded-host', 'x-forwarded-proto', 'cookie'])
-    : undefined
+  const slug = useTenantSlug()
+  const forwarded = import.meta.server
+    ? useRequestHeaders(['host', 'x-forwarded-host', 'x-forwarded-proto'])
+    : {}
+  return { ...forwarded, ...(slug.value ? { 'X-Vondo-Restaurant': slug.value } : {}) }
 }
 
 export function tenantHref(href: string) {
@@ -133,4 +134,3 @@ export function tenantHref(href: string) {
   }
   return clean || '/'
 }
-

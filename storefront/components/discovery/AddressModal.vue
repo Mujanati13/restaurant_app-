@@ -15,29 +15,51 @@ const inputQuery = ref('')
 const searching = ref(false)
 const searchResults = ref<AddressMatch[]>([])
 const searchSubmitted = ref(false)
+const searchError = ref('')
+const dialogRef = ref<HTMLDialogElement | null>(null)
+let previousFocus: HTMLElement | null = null
+let previousOverflow = ''
+let searchVersion = 0
 
 // Focus management
 const searchInputRef = ref<HTMLInputElement | null>(null)
 
 watch(isAddressModalOpen, (isOpen) => {
   if (isOpen) {
+    previousFocus = document.activeElement as HTMLElement
+    previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    searchError.value = ''
     inputQuery.value = selectedAddress.value
     searchResults.value = []
     searchSubmitted.value = false
     nextTick(() => {
+      dialogRef.value?.showModal()
       searchInputRef.value?.focus()
     })
+  } else {
+    searchVersion++
+    searching.value = false
+    dialogRef.value?.close()
+    document.body.style.overflow = previousOverflow
+    previousFocus?.focus()
   }
 })
+onBeforeUnmount(() => { if (import.meta.client && isAddressModalOpen.value) document.body.style.overflow = previousOverflow })
 
 const handleSearch = async () => {
   if (!inputQuery.value.trim()) return
+  const version = ++searchVersion
+  searchError.value = ''
   searching.value = true
   searchSubmitted.value = true
   try {
-    searchResults.value = await searchAddresses(inputQuery.value)
+    const matches = await searchAddresses(inputQuery.value)
+    if (version === searchVersion) searchResults.value = matches
+  } catch (error: any) {
+    if (version === searchVersion) searchError.value = error?.data?.message || 'Address search is unavailable. Please try again or use your location.'
   } finally {
-    searching.value = false
+    if (version === searchVersion) searching.value = false
   }
 }
 
@@ -61,13 +83,14 @@ const handleKeydown = (e: KeyboardEvent) => {
 
 <template>
   <Teleport to="body">
-    <div
-      v-if="isAddressModalOpen"
+    <dialog
+      ref="dialogRef"
       class="address-modal-backdrop"
       role="dialog"
       aria-modal="true"
       aria-labelledby="address-modal-title"
       @keydown="handleKeydown"
+      @cancel.prevent="isAddressModalOpen = false"
       @click.self="isAddressModalOpen = false"
     >
       <div class="address-modal-card">
@@ -101,6 +124,8 @@ const handleKeydown = (e: KeyboardEvent) => {
                 type="text"
                 class="address-search-input"
                 placeholder="e.g. Bahnhofstrasse 1, Zürich or 8001"
+                aria-label="Street address or postcode"
+                minlength="2"
                 required
               />
               <button
@@ -140,6 +165,7 @@ const handleKeydown = (e: KeyboardEvent) => {
             <span>Looking up address matches…</span>
           </div>
 
+          <div v-else-if="searchError" role="alert" class="alert-notice warning">{{ searchError }}</div>
           <div v-else-if="searchSubmitted && searchResults.length === 0" class="matches-empty">
             <i class="ri-map-pin-user-line text-muted" />
             <p>No address matches found for "{{ inputQuery }}".</p>
@@ -153,9 +179,11 @@ const handleKeydown = (e: KeyboardEvent) => {
                 v-for="(match, idx) in searchResults"
                 :key="idx"
                 class="match-item"
+                role="button"
                 tabindex="0"
                 @click="handleSelect(match)"
                 @keydown.enter="handleSelect(match)"
+                @keydown.space.prevent="handleSelect(match)"
               >
                 <div class="match-icon">
                   <i class="ri-map-pin-line" />
@@ -172,12 +200,13 @@ const handleKeydown = (e: KeyboardEvent) => {
           </div>
         </div>
       </div>
-    </div>
+    </dialog>
   </Teleport>
 </template>
 
 <style scoped>
-.address-modal-backdrop {
+.address-modal-backdrop:not([open]) { display: none; }
+.address-modal-backdrop { width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; border: 0;
   position: fixed;
   inset: 0;
   z-index: 9999;

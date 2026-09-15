@@ -2104,3 +2104,8 @@ h1, h2, h3, h4 {
     transition-duration: 0.01ms !important;
   }
 }
+/* Shared accessibility treatment for discovery and restaurant views. */
+:focus-visible { outline: 3px solid #a23e24; outline-offset: 4px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}

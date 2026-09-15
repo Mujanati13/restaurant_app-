@@ -5,6 +5,8 @@ import { generateUUID } from '~/utils/uuid'
 const bootstrapData = useActiveTenant()
 const api = useStorefrontApi()
 const cart = useTenantCart()
+const tenantIdentity = computed(() => bootstrapData.value?.restaurant.id || 'none')
+const orderingContext = useCookie<{ location: number; orderType: string } | null>('deliveriano-order-' + tenantIdentity.value)
 const headers = useStorefrontHeaders()
 const { data: locations } = await useFetch<{ data: Location[] }>('/api/v1/storefront/locations', { headers })
 
@@ -15,7 +17,7 @@ const paymentMethods = computed<PaymentMethod[]>(() => bootstrapData.value?.paym
 
 const form = reactive({
   location_id: 0,
-  order_type: 'collection',
+  order_type: orderingContext.value?.orderType === 'delivery' ? 'delivery' : 'collection',
   first_name: '',
   last_name: '',
   email: '',
@@ -32,7 +34,8 @@ const form = reactive({
 // Auto-select default location or first location
 watchEffect(() => {
   if (locations.value?.data?.length && (!form.location_id || form.location_id === 0)) {
-    const def = locations.value.data.find(l => l.is_default) || locations.value.data[0]
+    const def = locations.value.data.find(l => l.id === orderingContext.value?.location)
+      || locations.value.data.find(l => l.is_default) || locations.value.data[0]
     if (def) form.location_id = def.id
   }
 })
@@ -367,4 +370,3 @@ useSeoMeta({
     </div>
   </div>
 </template>
-

@@ -33,7 +33,7 @@ export function resolveRestaurantSlug(event: H3Event): string | null {
   }
 
   // 3. Explicit query parameter (e.g. during dev or preview links)
-  if (fromQuery) return fromQuery
+  if (fromQuery && isLocalDev) return fromQuery
 
   // 4. Custom domain or explicit cookie fallback for existing tenant sessions
   if (!isMarketplaceHost && !isLocalDev) {
@@ -56,4 +56,3 @@ export function buildTenantHeaders(event: H3Event): Record<string, string> {
   const slug = resolveRestaurantSlug(event)
   return slug ? { 'x-vondo-restaurant': slug } : {}
 }
-

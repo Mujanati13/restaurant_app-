@@ -23,8 +23,8 @@ class DiscoveryController extends Controller
         abort_unless(config('vondo.marketplace_enabled', true), 404, 'Marketplace discovery is disabled.');
 
         $validated = $request->validate([
-            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
-            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'latitude' => ['nullable', 'required_with:longitude', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'required_with:latitude', 'numeric', 'between:-180,180'],
             'order_type' => ['nullable', 'string', 'in:delivery,collection'],
             'search' => ['nullable', 'string', 'max:100'],
             'cuisine' => ['nullable', 'string', 'max:50'],
@@ -65,7 +65,7 @@ class DiscoveryController extends Controller
                 ? $restaurant->cuisine_tags
                 : (json_decode((string)$restaurant->cuisine_tags, true) ?: []);
 
-            if ($cuisine && !empty($cuisineTags)) {
+            if ($cuisine) {
                 $matchesCuisine = collect($cuisineTags)->contains(fn($tag) => mb_strtolower((string)$tag) === $cuisine);
                 if (!$matchesCuisine) {
                     continue;
@@ -88,8 +88,8 @@ class DiscoveryController extends Controller
                 ->where('location_status', true)
                 ->whereNotNull('location_lat')
                 ->whereNotNull('location_lng')
-                ->where('location_lat', '!=', 0)
-                ->where('location_lng', '!=', 0)
+                ->whereBetween('location_lat', [-90, 90])
+                ->whereBetween('location_lng', [-180, 180])
                 ->with(['delivery_areas', 'working_hours'])
                 ->get();
 
@@ -184,16 +184,15 @@ class DiscoveryController extends Controller
             $logoUrl = $publicBrand['identity']['logo_url'] ?? null;
 
             // Working hours / availability
-            $isOpen = true;
+            $isOpen = null;
             try {
-                if (method_exists($location, 'working_schedule')) {
-                    $schedule = $location->working_schedule();
-                    if ($schedule && method_exists($schedule, 'isOpen')) {
-                        $isOpen = $schedule->isOpen();
-                    }
+                if ($location->working_hours->isNotEmpty()) {
+                    $schedule = $location->newWorkingSchedule($orderType, 0);
+                    $schedule->setTimezone($restaurant->timezone ?: 'Europe/Zurich');
+                    $isOpen = $schedule->isOpen();
                 }
             } catch (Throwable) {
-                $isOpen = true;
+                $isOpen = null;
             }
 
             $restaurantId = (int)$restaurant->getKey();
@@ -261,6 +260,7 @@ class DiscoveryController extends Controller
 
     public function addressLookup(Request $request): JsonResponse
     {
+        abort_unless(config('vondo.marketplace_enabled', true), 404);
         $validated = $request->validate([
             'query' => ['required', 'string', 'between:2,255'],
         ]);
@@ -268,18 +268,14 @@ class DiscoveryController extends Controller
         $query = trim((string)$validated['query']);
         $googleKey = config('vondo.google_maps_api_key');
 
-        // Test environment or fallback coordinates for verification when key is absent
-        if (empty($googleKey) || app()->environment('testing')) {
-            $matches = $this->mockSwissAddressMatches($query);
-            return response()->json(['data' => $matches]);
-        }
+        abort_unless($googleKey, 503, 'Address search is not configured yet. Please use your current location.');
 
         try {
             config(['igniter-geocoder.providers.google.apiKey' => $googleKey]);
             config(['igniter-geocoder.providers.google.region' => 'CH']);
             config(['igniter-geocoder.providers.google.locale' => 'de-CH']);
 
-            $results = Geocoder::using('google')->geocode($query . ', Switzerland');
+            $results = Geocoder::using('google')->geocodeQuery(\Igniter\Flame\Geolite\GeoQuery::create($query . ', Switzerland')->withLimit(5));
 
             $matches = collect($results)->map(fn($item) => [
                 'formatted_address' => $item->getFormattedAddress() ?: $query,
@@ -292,12 +288,14 @@ class DiscoveryController extends Controller
 
             return response()->json(['data' => $matches]);
         } catch (Throwable $e) {
-            abort(503, 'Address lookup service is currently unavailable: ' . $e->getMessage());
+            report($e);
+            abort(503, 'Address search is temporarily unavailable. Please try again or use your current location.');
         }
     }
 
     public function reverseLookup(Request $request): JsonResponse
     {
+        abort_unless(config('vondo.marketplace_enabled', true), 404);
         $validated = $request->validate([
             'latitude' => ['required', 'numeric', 'between:-90,90'],
             'longitude' => ['required', 'numeric', 'between:-180,180'],
@@ -307,15 +305,15 @@ class DiscoveryController extends Controller
         $lng = (float)$validated['longitude'];
         $googleKey = config('vondo.google_maps_api_key');
 
-        if (empty($googleKey) || app()->environment('testing')) {
+        if (empty($googleKey)) {
             return response()->json([
                 'data' => [
                     'formatted_address' => sprintf('Current location (%.4f, %.4f)', $lat, $lng),
                     'latitude' => $lat,
                     'longitude' => $lng,
-                    'postal_code' => '8001',
-                    'locality' => 'Zürich',
-                    'country' => 'CH',
+                    'postal_code' => null,
+                    'locality' => null,
+                    'country' => null,
                 ],
             ]);
         }
@@ -324,7 +322,7 @@ class DiscoveryController extends Controller
             config(['igniter-geocoder.providers.google.apiKey' => $googleKey]);
             config(['igniter-geocoder.providers.google.region' => 'CH']);
 
-            $result = Geocoder::using('google')->reverse($lat, $lng)->first();
+            $result = Geocoder::using('google')->reverseQuery(\Igniter\Flame\Geolite\GeoQuery::fromCoordinates($lat, $lng))->first();
 
             return response()->json([
                 'data' => [
@@ -342,8 +340,8 @@ class DiscoveryController extends Controller
                     'formatted_address' => sprintf('Location (%.4f, %.4f)', $lat, $lng),
                     'latitude' => $lat,
                     'longitude' => $lng,
-                    'locality' => 'Switzerland',
-                    'country' => 'CH',
+                    'locality' => null,
+                    'country' => null,
                 ],
             ]);
         }
@@ -351,9 +349,11 @@ class DiscoveryController extends Controller
 
     public function cuisines(): JsonResponse
     {
+        abort_unless(config('vondo.marketplace_enabled', true), 404);
         $restaurants = Restaurant::query()
             ->where('status', 'active')
             ->where('discovery_enabled', true)
+            ->whereHas('brandRevisions', fn($q) => $q->whereNotNull('published_at'))
             ->get(['cuisine_tags']);
 
         $counts = [];
@@ -364,14 +364,6 @@ class DiscoveryController extends Controller
                 if ($trimmed !== '') {
                     $counts[$trimmed] = ($counts[$trimmed] ?? 0) + 1;
                 }
-            }
-        }
-
-        // Popular Swiss & international categories to ensure a rich explorer experience
-        $popular = ['Pizza', 'Italian', 'Burgers', 'Sushi', 'Asian', 'Swiss', 'Bakery', 'Desserts', 'Healthy'];
-        foreach ($popular as $p) {
-            if (!isset($counts[$p])) {
-                $counts[$p] = 0;
             }
         }
 
@@ -399,43 +391,4 @@ class DiscoveryController extends Controller
         return $earthRadius * $c;
     }
 
-    private function mockSwissAddressMatches(string $query): array
-    {
-        $q = mb_strtolower($query);
-        $swissCities = [
-            'zurich' => ['formatted_address' => 'Bahnhofstrasse 1, 8001 Zürich, Switzerland', 'latitude' => 47.3769, 'longitude' => 8.5417, 'postal_code' => '8001', 'locality' => 'Zürich'],
-            'zürich' => ['formatted_address' => 'Bahnhofstrasse 1, 8001 Zürich, Switzerland', 'latitude' => 47.3769, 'longitude' => 8.5417, 'postal_code' => '8001', 'locality' => 'Zürich'],
-            'geneva' => ['formatted_address' => 'Rue du Rhône 42, 1204 Genève, Switzerland', 'latitude' => 46.2044, 'longitude' => 6.1432, 'postal_code' => '1204', 'locality' => 'Genève'],
-            'genève' => ['formatted_address' => 'Rue du Rhône 42, 1204 Genève, Switzerland', 'latitude' => 46.2044, 'longitude' => 6.1432, 'postal_code' => '1204', 'locality' => 'Genève'],
-            'bern' => ['formatted_address' => 'Kramgasse 20, 3011 Bern, Switzerland', 'latitude' => 46.9480, 'longitude' => 7.4474, 'postal_code' => '3011', 'locality' => 'Bern'],
-            'basel' => ['formatted_address' => 'Freie Strasse 15, 4001 Basel, Switzerland', 'latitude' => 47.5596, 'longitude' => 7.5886, 'postal_code' => '4001', 'locality' => 'Basel'],
-            'lausanne' => ['formatted_address' => 'Place Saint-François 5, 1003 Lausanne, Switzerland', 'latitude' => 46.5197, 'longitude' => 6.6323, 'postal_code' => '1003', 'locality' => 'Lausanne'],
-            'winterthur' => ['formatted_address' => 'Marktgasse 30, 8400 Winterthur, Switzerland', 'latitude' => 47.4999, 'longitude' => 8.7241, 'postal_code' => '8400', 'locality' => 'Winterthur'],
-            'lucerne' => ['formatted_address' => 'Kapellgasse 8, 6004 Luzern, Switzerland', 'latitude' => 47.0502, 'longitude' => 8.3093, 'postal_code' => '6004', 'locality' => 'Luzern'],
-            'luzern' => ['formatted_address' => 'Kapellgasse 8, 6004 Luzern, Switzerland', 'latitude' => 47.0502, 'longitude' => 8.3093, 'postal_code' => '6004', 'locality' => 'Luzern'],
-        ];
-
-        foreach ($swissCities as $city => $data) {
-            if (str_contains($q, $city)) {
-                return [[
-                    'formatted_address' => $data['formatted_address'],
-                    'latitude' => $data['latitude'],
-                    'longitude' => $data['longitude'],
-                    'postal_code' => $data['postal_code'],
-                    'locality' => $data['locality'],
-                    'country' => 'CH',
-                ]];
-            }
-        }
-
-        // Default Swiss fallback match for query
-        return [[
-            'formatted_address' => ucwords($query) . ', Switzerland',
-            'latitude' => 47.3769,
-            'longitude' => 8.5417,
-            'postal_code' => '8001',
-            'locality' => 'Zürich',
-            'country' => 'CH',
-        ]];
-    }
 }

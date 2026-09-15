@@ -12,7 +12,7 @@
   estimated_minutes: number
   offer_delivery: boolean
   offer_collection: boolean
-  is_open: boolean
+  is_open: boolean | null
 }
 
 export interface DiscoveryRestaurant {
@@ -45,11 +45,8 @@ export interface CuisineItem {
 }
 
 export function useDiscovery() {
-  const selectedAddress = useState<string>('discovery-address', () => 'Bahnhofstrasse 1, Zürich')
-  const selectedCoordinates = useState<{ lat: number; lng: number } | null>('discovery-coordinates', () => ({
-    lat: 47.3769,
-    lng: 8.5417,
-  }))
+  const selectedAddress = useState<string>('discovery-address', () => '')
+  const selectedCoordinates = useState<{ lat: number; lng: number } | null>('discovery-coordinates', () => null)
   const orderType = useState<'delivery' | 'collection'>('discovery-order-type', () => 'delivery')
   const searchQuery = useState<string>('discovery-search', () => '')
   const selectedCuisine = useState<string | null>('discovery-cuisine', () => null)
@@ -109,14 +106,10 @@ export function useDiscovery() {
 
   const searchAddresses = async (queryText: string): Promise<AddressMatch[]> => {
     if (!queryText || queryText.trim().length < 2) return []
-    try {
-      const res = await $fetch<{ data: AddressMatch[] }>('/api/v1/discovery/address-lookup', {
+    const res = await $fetch<{ data: AddressMatch[] }>('/api/v1/discovery/address-lookup', {
         query: { query: queryText.trim() },
       })
-      return res.data || []
-    } catch {
-      return []
-    }
+    return res.data || []
   }
 
   const selectAddress = (match: AddressMatch) => {

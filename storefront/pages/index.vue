@@ -17,6 +17,8 @@ const { data: categories } = await useFetch<{ data: Category[] }>('/api/v1/store
   immediate: !isMarketplace.value,
 })
 
+const { data: locationData } = await useFetch<{ data: import('~/types/storefront').Location[] }>('/api/v1/storefront/locations', { headers, immediate: !isMarketplace.value })
+const restaurantLocations = computed(() => locationData.value?.data || [])
 const cart = useTenantCart()
 const selectedCategoryId = ref<number | null>(null)
 
@@ -47,7 +49,7 @@ const restaurantStory = computed(() => {
 })
 
 const coverPhoto = computed(() => {
-  return brand.value?.content?.hero_image_url || null
+  return brand.value?.content?.hero_image_url || menuData.value?.data.find(item => item.image)?.image || null
 })
 </script>
 
@@ -154,7 +156,7 @@ const coverPhoto = computed(() => {
           <div class="section-headline">
             <div>
               <span class="section-kicker">Fresh from the kitchen</span>
-              <h2>Popular Dishes</h2>
+              <h2>A taste of our menu</h2>
             </div>
             <div class="section-headline-meta">
               <span class="item-count-badge">{{ filteredMenu.length }} available</span>
@@ -195,19 +197,9 @@ const coverPhoto = computed(() => {
         <div class="container">
           <div class="story-card">
             <span class="section-kicker">Our Story</span>
-            <h2>Crafted with passion in Switzerland</h2>
+            <h2>Welcome to {{ tenant.restaurant.name }}</h2>
             <p class="story-paragraph">{{ restaurantStory }}</p>
 
-            <div class="story-meta-row">
-              <div class="story-meta-item">
-                <i class="ri-heart-3-line" />
-                <span>Authentic local recipe preparation</span>
-              </div>
-              <div class="story-meta-item">
-                <i class="ri-shield-check-line" />
-                <span>Fresh quality ingredients</span>
-              </div>
-            </div>
           </div>
         </div>
       </section>
@@ -220,6 +212,7 @@ const coverPhoto = computed(() => {
               <span class="section-kicker">Visit Us</span>
               <h2>Location & Contact</h2>
               <ul class="contact-info-list">
+                <li v-for="location in restaurantLocations" :key="location.id"><i class="ri-map-pin-line" /><div><strong>{{ location.name }}</strong><p>{{ location.address }}</p><a v-if="location.phone" :href="`tel:${location.phone}`">{{ location.phone }}</a></div></li>
                 <li v-if="tenant.restaurant.address">
                   <i class="ri-map-pin-2-fill text-primary" />
                   <div>
@@ -248,18 +241,18 @@ const coverPhoto = computed(() => {
               <span class="section-kicker">Service</span>
               <h2>Ordering & Fulfilment</h2>
               <div class="fulfilment-features">
-                <div class="fulfilment-card">
+                <div v-if="restaurantLocations.some(l => l.offer_delivery)" class="fulfilment-card">
                   <i class="ri-e-bike-2-fill text-primary" />
                   <div>
                     <strong>Delivery Service</strong>
                     <p>Hot and freshly prepared meals delivered directly to your door.</p>
                   </div>
                 </div>
-                <div class="fulfilment-card">
+                <div v-if="restaurantLocations.some(l => l.offer_collection)" class="fulfilment-card">
                   <i class="ri-store-2-fill text-primary" />
                   <div>
                     <strong>Takeaway & Collection</strong>
-                    <p>Order ahead online and collect promptly without waiting.</p>
+                    <p>Order online and collect from the restaurant.</p>
                   </div>
                 </div>
               </div>

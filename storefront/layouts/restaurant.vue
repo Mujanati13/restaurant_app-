@@ -4,6 +4,14 @@ import { useActiveTenant, tenantHref } from '~/composables/useTenant'
 const tenant = useActiveTenant()
 const cart = useTenantCart()
 const mobileOpen = ref(false)
+const route = useRoute()
+const orderContext = useCookie<{ location: number; orderType: string } | null>('deliveriano-order-' + (tenant.value?.restaurant.id || 'none'), { sameSite: 'lax', maxAge: 3600 })
+watchEffect(() => {
+  const location = Number(route.query.location)
+  if (Number.isInteger(location) && location > 0 && ['delivery', 'collection'].includes(String(route.query.order_type))) {
+    orderContext.value = { location, orderType: String(route.query.order_type) }
+  }
+})
 
 const theme = computed(() => tenant.value?.brand.theme || {})
 const rootStyle = computed(() => ({
@@ -25,8 +33,7 @@ const rootStyle = computed(() => ({
     <div class="top-status-bar">
       <div class="container top-status-inner">
         <div class="status-left">
-          <span class="online-pulse" />
-          <span>Accepting Orders</span>
+          <span>{{ tenant.brand.identity.tagline || 'Welcome to our table' }}</span>
         </div>
         <div class="status-right">
           <span v-if="tenant.restaurant.address">

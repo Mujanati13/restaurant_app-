@@ -9,6 +9,7 @@ export default defineNuxtConfig({
     defaultRestaurant: process.env.NUXT_DEFAULT_RESTAURANT || '',
     public: {
       apiBase: '/api',
+      ownerPortalUrl: 'https://backend.deliveriano.ch/vondo-admin',
       baseDomain: process.env.NUXT_BASE_DOMAIN || 'deliveriano.ch',
     },
   },

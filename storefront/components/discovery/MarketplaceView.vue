@@ -11,7 +11,12 @@ const {
   isAddressModalOpen,
   requestGpsLocation,
   gpsStatus,
+  gpsError,
+  radiusKm,
 } = useDiscovery()
+
+const page = ref(1)
+watch([selectedCoordinates, searchQuery, selectedCuisine, orderType, radiusKm], () => { page.value = 1 }, { flush: 'sync' })
 
 // Fetch Cuisines
 const { data: cuisinesData } = await useFetch<{ data: CuisineItem[] }>('/api/v1/discovery/cuisines')
@@ -21,6 +26,8 @@ const cuisines = computed(() => cuisinesData.value?.data || [])
 const queryParams = computed(() => {
   const p: Record<string, any> = {
     order_type: orderType.value,
+    page: page.value,
+    radius_km: radiusKm.value,
   }
   if (selectedCoordinates.value) {
     p.latitude = selectedCoordinates.value.lat
@@ -45,6 +52,7 @@ const {
   watch: [queryParams],
 })
 
+const heroRestaurant = computed(() => discoveryData.value?.data.find(r => r.cover_photo_url))
 const restaurants = computed(() => discoveryData.value?.data || [])
 const meta = computed(() => discoveryData.value?.meta)
 
@@ -79,11 +87,11 @@ const handleUseGpsHero = async () => {
           </div>
 
           <h1 class="hero-title">
-            Exceptional food from independent local kitchens, delivered fresh.
+            Good food.<br />Closer than you think.
           </h1>
 
           <p class="hero-sub">
-            Discover artisanal pizzerias, authentic sushi bars, and local culinary favourites near you.
+            Your next favourite meal is around the corner. Find a local kitchen, choose something delicious, and make yourself at home.
           </p>
 
           <!-- Address Bar Box -->
@@ -123,10 +131,10 @@ const handleUseGpsHero = async () => {
               >
                 <i class="ri-map-pin-2-fill address-pin-icon" />
                 <div class="address-trigger-text">
-                  <span class="trigger-label">Delivering to</span>
-                  <strong class="trigger-val">{{ selectedAddress }}</strong>
+                  <span class="trigger-label">{{ orderType === 'delivery' ? 'Your delivery address' : 'Find pickup near' }}</span>
+                  <strong class="trigger-val">{{ selectedAddress || 'Where would you like to eat?' }}</strong>
                 </div>
-                <span class="btn-change-address">Change</span>
+                <span class="btn-change-address">{{ selectedCoordinates ? 'Change' : 'Find food' }}</span>
               </button>
 
               <button
@@ -143,6 +151,15 @@ const handleUseGpsHero = async () => {
               </button>
             </div>
           </div>
+          <p v-if="gpsError" role="alert" class="location-notice">{{ gpsError }}</p>
+        </div>
+        <a v-if="heroRestaurant" class="hero-food" :href="heroRestaurant.subdomain_url">
+          <img :src="heroRestaurant.cover_photo_url!" :alt="heroRestaurant.name" fetchpriority="high" />
+          <div><span>Meet your local kitchens</span><strong>{{ heroRestaurant.name }}</strong></div>
+        </a>
+        <div v-else class="hero-editorial" aria-hidden="true">
+          <span>Made nearby.</span><em>Enjoyed here.</em>
+          <p>A table for every taste.</p>
         </div>
       </div>
     </section>
@@ -178,15 +195,20 @@ const handleUseGpsHero = async () => {
     <!-- Discovery Results Section -->
     <section class="results-section">
       <div class="container">
+        <p v-if="!selectedCoordinates" class="location-notice">Choose an address to check delivery coverage and see restaurants nearest to you.</p>
+        <label v-if="orderType === 'collection' && selectedCoordinates" class="radius-control">
+          Search within
+          <select v-model.number="radiusKm"><option :value="10">10 km</option><option :value="25">25 km</option><option :value="50">50 km</option></select>
+        </label>
         <!-- Results Controls Bar -->
         <div class="results-toolbar">
           <div class="results-heading-wrap">
             <h2 class="results-title">
               <span v-if="selectedCuisine">{{ selectedCuisine }} Restaurants</span>
-              <span v-else>Restaurants nearby</span>
+              <span v-else>{{ selectedCoordinates ? 'Restaurants near you' : 'Discover our local kitchens' }}</span>
             </h2>
             <span v-if="meta" class="results-count">
-              {{ meta.total }} {{ meta.total === 1 ? 'place' : 'places' }} available
+              {{ meta.total }} {{ meta.total === 1 ? 'place' : 'places' }} {{ selectedCoordinates ? 'in your area' : 'to explore' }}
             </span>
           </div>
 
@@ -266,6 +288,11 @@ const handleUseGpsHero = async () => {
             :order-type="orderType"
           />
         </div>
+        <nav v-if="meta?.last_page > 1" class="results-pagination" aria-label="Restaurant results pages">
+          <button class="btn outline" :disabled="page <= 1 || status === 'pending'" @click="page--">Previous</button>
+          <span aria-live="polite">Page {{ page }} of {{ meta.last_page }}</span>
+          <button class="btn outline" :disabled="page >= meta.last_page || status === 'pending'" @click="page++">Next</button>
+        </nav>
       </div>
     </section>
   </div>
@@ -286,7 +313,11 @@ const handleUseGpsHero = async () => {
 }
 
 .hero-container {
-  max-width: 860px;
+  max-width: 1240px;
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 3rem;
+  align-items: center;
 }
 
 .hero-badge-wrap {
@@ -660,4 +691,17 @@ const handleUseGpsHero = async () => {
     max-width: 100%;
   }
 }
+.hero-food { position: relative; display: block; aspect-ratio: 4/5; overflow: hidden; border-radius: 48% 48% 16px 16px; color: white; }
+.hero-food img { width: 100%; height: 100%; object-fit: cover; }
+.hero-food > div { position: absolute; inset: auto 0 0; padding: 3rem 1.5rem 1.5rem; background: linear-gradient(transparent, #21140de6); }
+.hero-food span, .hero-food strong { display: block; }
+.hero-food strong { font-size: 1.7rem; margin-top: .4rem; }
+.hero-editorial { padding: 4rem 2rem; border: 1px solid #dbb9a0; border-radius: 50% 50% 12px 12px; background: #efd9bd; text-align: center; color: #783522; }
+.hero-editorial span, .hero-editorial em { display: block; font: 2.8rem/1.3 'Playfair Display', serif; }
+.hero-editorial p { margin-top: 2rem; }
+.location-notice { margin: 1rem 0; color: #655448; line-height: 1.6; }
+.results-pagination { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 2rem; }
+.radius-control { display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem; }
+.radius-control select { padding: .6rem; border: 1px solid #dbb9a0; border-radius: 8px; background: white; }
+@media (max-width: 760px) { .hero-container { grid-template-columns: 1fr; gap: 1.5rem; } .hero-food { aspect-ratio: 16/9; border-radius: 20px; } .hero-editorial { display: none; } }
 </style>

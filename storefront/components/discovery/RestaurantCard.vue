@@ -8,17 +8,16 @@ const props = defineProps<{
 
 const loc = computed(() => props.restaurant.selected_location)
 
-// Link destination: subdomain or fallback in dev
+const requestUrl = useRequestURL()
 const restaurantUrl = computed(() => {
-  if (import.meta.client) {
-    const host = window.location.host
-    // In local dev, if on localhost, pass query parameter for preview
-    if (host.includes('localhost') || host.includes('127.0.0.1')) {
-      return `/?restaurant=${encodeURIComponent(props.restaurant.slug)}`
-    }
-  }
-  return props.restaurant.subdomain_url || `/?restaurant=${encodeURIComponent(props.restaurant.slug)}`
+  const local = ['localhost', '127.0.0.1'].includes(requestUrl.hostname)
+  const url = new URL(local ? '/' : props.restaurant.subdomain_url, requestUrl.origin)
+  if (local) url.searchParams.set('restaurant', props.restaurant.slug)
+  url.searchParams.set('location', String(loc.value.id))
+  url.searchParams.set('order_type', props.orderType)
+  return url.toString()
 })
+const money = (value: number) => new Intl.NumberFormat('de-CH', { style: 'currency', currency: props.restaurant.currency_code }).format(value)
 </script>
 
 <template>
@@ -45,10 +44,10 @@ const restaurantUrl = computed(() => {
       </div>
 
       <!-- Live Availability / Time Badge -->
-      <div class="card-status-badge" :class="{ closed: !loc.is_open }">
+      <div v-if="loc.is_open !== null" class="card-status-badge" :class="{ closed: !loc.is_open }">
         <span class="status-dot" :class="{ active: loc.is_open }" />
         <span v-if="loc.is_open">
-          {{ loc.estimated_minutes ? `${loc.estimated_minutes} min` : 'Open' }}
+          {{ loc.estimated_minutes ? `Est. ${loc.estimated_minutes} min` : 'Open' }}
         </span>
         <span v-else>Closed</span>
       </div>
@@ -94,7 +93,7 @@ const restaurantUrl = computed(() => {
         <div v-if="orderType === 'delivery'" class="meta-item">
           <i class="ri-e-bike-2-line" />
           <span>
-            {{ loc.delivery_charge > 0 ? `${restaurant.currency_symbol}${loc.delivery_charge.toFixed(2)} delivery` : 'Free delivery' }}
+            {{ loc.delivery_charge > 0 ? `${money(loc.delivery_charge)} delivery` : 'Free delivery' }}
           </span>
         </div>
         <div v-else class="meta-item">
@@ -104,8 +103,8 @@ const restaurantUrl = computed(() => {
 
         <span class="meta-dot">•</span>
 
-        <div v-if="loc.min_delivery_order > 0" class="meta-item">
-          <span>Min. {{ restaurant.currency_symbol }}{{ loc.min_delivery_order.toFixed(2) }}</span>
+        <div v-if="orderType === 'delivery' && loc.min_delivery_order > 0" class="meta-item">
+          <span>Min. {{ money(loc.min_delivery_order) }}</span>
         </div>
         <div v-else class="meta-item">
           <span>No minimum</span>
