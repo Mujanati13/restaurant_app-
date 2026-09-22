@@ -26,6 +26,8 @@ export interface DiscoveryRestaurant {
   subdomain_url: string
   currency_code: string
   currency_symbol: string
+  rating: number | null
+  review_count: number
   selected_location: DiscoveryRestaurantLocation
 }
 
@@ -51,6 +53,10 @@ export function useDiscovery() {
   const searchQuery = useState<string>('discovery-search', () => '')
   const selectedCuisine = useState<string | null>('discovery-cuisine', () => null)
   const radiusKm = useState<number>('discovery-radius', () => 10)
+  const minRating = useState<number | null>('discovery-min-rating', () => null)
+  const maxDeliveryFee = useState<number | null>('discovery-max-delivery-fee', () => null)
+  const openNow = useState<boolean>('discovery-open-now', () => false)
+  const sort = useState<'recommended' | 'rating' | 'delivery_fee' | 'eta' | 'distance'>('discovery-sort', () => 'recommended')
   const isAddressModalOpen = useState<boolean>('discovery-address-modal-open', () => false)
 
   const gpsStatus = useState<'idle' | 'requesting' | 'granted' | 'denied' | 'error'>('discovery-gps-status', () => 'idle')
@@ -125,6 +131,10 @@ export function useDiscovery() {
     searchQuery,
     selectedCuisine,
     radiusKm,
+    minRating,
+    maxDeliveryFee,
+    openNow,
+    sort,
     isAddressModalOpen,
     gpsStatus,
     gpsError,

@@ -108,11 +108,14 @@ Route::prefix('v1')->group(function (): void {
         Route::get('menus', [StorefrontTenantController::class, 'menus']);
         Route::get('menus/{menuId}', [StorefrontTenantController::class, 'menu'])->whereNumber('menuId');
         Route::get('locations', [StorefrontTenantController::class, 'locations']);
+        Route::get('fulfillment-slots', [StorefrontCommerceController::class, 'fulfillmentSlots']);
+        Route::get('offers', [StorefrontCommerceController::class, 'offers']);
         Route::get('pages/{slug}', [StorefrontPageController::class, 'show'])->where('slug', '[a-z0-9_-]+');
         Route::get('media/{publicId}', [TenantMediaController::class, 'show'])->whereUuid('publicId');
         Route::post('analytics/events', [StorefrontAnalyticsController::class, 'store'])->middleware('throttle:120,1');
 
         Route::post('orders', [StorefrontCommerceController::class, 'createOrder']);
+        Route::post('orders/quote', [StorefrontCommerceController::class, 'quoteOrder']);
         Route::post('reservations', [StorefrontCommerceController::class, 'createReservation']);
         Route::post('webhooks/stripe', [StorefrontCommerceController::class, 'handleStripeWebhook']);
 
@@ -123,8 +126,14 @@ Route::prefix('v1')->group(function (): void {
             Route::patch('account', [StorefrontCommerceController::class, 'updateAccount']);
             Route::get('addresses', [StorefrontCommerceController::class, 'addresses']);
             Route::post('addresses', [StorefrontCommerceController::class, 'createAddress']);
+            Route::delete('addresses/{addressId}', [StorefrontCommerceController::class, 'deleteAddress'])->whereNumber('addressId');
             Route::get('orders', [StorefrontCommerceController::class, 'orders']);
             Route::get('orders/{orderId}', [StorefrontCommerceController::class, 'order'])->whereNumber('orderId');
+            Route::post('orders/{orderId}/cancel', [StorefrontCommerceController::class, 'cancelOrder'])->whereNumber('orderId');
+            Route::post('orders/{orderId}/review', [StorefrontCommerceController::class, 'reviewOrder'])->whereNumber('orderId');
+            Route::get('favorites', [StorefrontCommerceController::class, 'favorites']);
+            Route::post('favorites/{menuId}', [StorefrontCommerceController::class, 'addFavorite'])->whereNumber('menuId');
+            Route::delete('favorites/{menuId}', [StorefrontCommerceController::class, 'removeFavorite'])->whereNumber('menuId');
             Route::get('reservations', [StorefrontCommerceController::class, 'reservations']);
             Route::delete('token', [StorefrontSessionController::class, 'destroy']);
         });

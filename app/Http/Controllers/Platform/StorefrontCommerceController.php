@@ -6,6 +6,9 @@ use App\Jobs\SendTenantPush;
 use App\Platform\Support\IdempotentRequest;
 use App\Platform\Support\TenantSettings;
 use App\Platform\Tenancy\TenantContext;
+use App\Platform\Models\StorefrontFavorite;
+use App\Platform\Models\StorefrontReview;
+use App\Platform\Models\StorefrontOffer;
 use Igniter\Cart\CartItem;
 use Igniter\Cart\Models\Menu;
 use Igniter\Cart\Models\Order;
@@ -88,12 +91,133 @@ class StorefrontCommerceController extends Controller
         return response()->json(['data' => ['id' => (int)$address->getKey()]], 201);
     }
 
+    public function deleteAddress(Request $request, int $addressId): JsonResponse
+    {
+        $address = $this->customer($request)->addresses()
+            ->where('restaurant_id', $this->tenant->id())->findOrFail($addressId);
+        $address->delete();
+
+        return response()->json(status: 204);
+    }
+
     public function order(Request $request, int $orderId): JsonResponse
     {
         $order = Order::query()->with(['status', 'location', 'menus.menu_options', 'totals', 'status_history.status'])
             ->where('restaurant_id', $this->tenant->id())
             ->where('customer_id', $this->customer($request)->getKey())->findOrFail($orderId);
         return response()->json(['data' => $this->orderData($order)]);
+    }
+
+    public function offers(): JsonResponse
+    {
+        $offers = StorefrontOffer::query()->where('restaurant_id', $this->tenant->id())->where('active', true)
+            ->where(fn($query) => $query->whereNull('starts_at')->orWhere('starts_at', '<=', now()))
+            ->where(fn($query) => $query->whereNull('ends_at')->orWhere('ends_at', '>=', now()))
+            ->orderBy('code')->get();
+        return response()->json(['data' => $offers->map(fn(StorefrontOffer $offer) => [
+            'code' => $offer->code, 'type' => $offer->type, 'amount' => (float)$offer->amount,
+            'minimum_order' => (float)$offer->minimum_order, 'ends_at' => $offer->ends_at?->toIso8601String(),
+        ])->values()]);
+    }
+
+    public function favorites(Request $request): JsonResponse
+    {
+        $customer = $this->customer($request);
+        $favorites = StorefrontFavorite::query()->where('restaurant_id', $this->tenant->id())
+            ->where('customer_id', $customer->getKey())->pluck('menu_id')->map(fn($id) => (int)$id)->values();
+        return response()->json(['data' => $favorites]);
+    }
+
+    public function addFavorite(Request $request, int $menuId): JsonResponse
+    {
+        $customer = $this->customer($request);
+        Menu::query()->where('restaurant_id', $this->tenant->id())->where('menu_status', true)->findOrFail($menuId);
+        StorefrontFavorite::query()->firstOrCreate([
+            'restaurant_id' => $this->tenant->id(), 'customer_id' => $customer->getKey(), 'menu_id' => $menuId,
+        ]);
+        return response()->json(['data' => ['menu_id' => $menuId]], 201);
+    }
+
+    public function removeFavorite(Request $request, int $menuId): JsonResponse
+    {
+        StorefrontFavorite::query()->where('restaurant_id', $this->tenant->id())
+            ->where('customer_id', $this->customer($request)->getKey())->where('menu_id', $menuId)->delete();
+        return response()->json(status: 204);
+    }
+
+    public function cancelOrder(Request $request, int $orderId): JsonResponse
+    {
+        $order = $this->ownedOrder($request, $orderId);
+        $window = max(0, $this->settings->integer('cancellation_window_minutes', 5));
+        abort_if($order->cancelled_at, 409, 'This order has already been cancelled.');
+        abort_unless($window > 0 && $order->created_at?->greaterThan(now()->subMinutes($window)), 409, 'The cancellation window has ended.');
+        $data = $request->validate(['reason' => ['nullable', 'string', 'max:300']]);
+        $order->forceFill(['cancelled_at' => now(), 'cancel_reason' => $data['reason'] ?? null])->save();
+        return response()->json(['data' => $this->orderData($order->fresh(['status', 'location', 'menus.menu_options', 'status_history.status']))]);
+    }
+
+    public function reviewOrder(Request $request, int $orderId): JsonResponse
+    {
+        $order = $this->ownedOrder($request, $orderId);
+        abort_if($order->cancelled_at, 409, 'Cancelled orders cannot be reviewed.');
+        $status = mb_strtolower((string)($order->status_name ?? $order->status?->status_name));
+        abort_unless(str_contains($status, 'complete') || str_contains($status, 'deliver'), 409, 'Only completed orders can be reviewed.');
+        $data = $request->validate(['rating' => ['required', 'integer', 'between:1,5'], 'comment' => ['nullable', 'string', 'max:500']]);
+        $review = StorefrontReview::query()->updateOrCreate([
+            'restaurant_id' => $this->tenant->id(), 'customer_id' => $this->customer($request)->getKey(), 'order_id' => $order->getKey(),
+        ], $data);
+        return response()->json(['data' => ['id' => $review->getKey(), ...$data]]);
+    }
+
+    /** Available restaurant-local times for the selected fulfilment method. */
+    public function fulfillmentSlots(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'location_id' => ['required', 'integer', Rule::exists('locations', 'location_id')->where('restaurant_id', $this->tenant->id())],
+            'order_type' => ['required', Rule::in(['delivery', 'collection'])],
+        ]);
+        $locationId = (int)$data['location_id'];
+        abort_unless($this->settings->boolean('orders_enabled', true, $locationId), 403, 'Online ordering is not enabled for this location.');
+        abort_unless($this->settings->boolean($data['order_type'].'_enabled', true, $locationId), 422, ucfirst($data['order_type']).' ordering is not enabled for this restaurant.');
+
+        $startHour = min(22, max(0, $this->settings->integer('scheduled_order_start_hour', 10, $locationId)));
+        $endHour = min(23, max($startHour + 1, $this->settings->integer('scheduled_order_end_hour', 22, $locationId)));
+        $timezone = $this->tenant->get()->timezone ?: 'Europe/Zurich';
+        $lead = $this->settings->integer($data['order_type'] === 'delivery' ? 'delivery_lead_time_minutes' : 'prep_time_minutes', 30, $locationId);
+        $first = now($timezone)->addMinutes(max(5, $lead))->second(0);
+        $first->addMinutes((30 - ($first->minute % 30)) % 30);
+        $slots = collect(range(0, 6))->flatMap(function (int $day) use ($first, $startHour, $endHour, $timezone): array {
+            $date = now($timezone)->addDays($day)->startOfDay();
+            return collect(range($startHour * 2, $endHour * 2 - 1))->map(function (int $halfHour) use ($date, $first): ?string {
+                $slot = $date->copy()->addMinutes($halfHour * 30);
+                return $slot->greaterThanOrEqualTo($first) ? $slot->toIso8601String() : null;
+            })->filter()->values()->all();
+        })->values();
+
+        return response()->json(['data' => ['timezone' => $timezone, 'asap' => $first->toIso8601String(), 'slots' => $slots]]);
+    }
+
+    /** Authoritative pre-check used by checkout before submitting an order. */
+    public function quoteOrder(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'location_id' => ['required', 'integer', Rule::exists('locations', 'location_id')->where('restaurant_id', $this->tenant->id())],
+            'order_type' => ['required', Rule::in(['delivery', 'collection'])],
+            'scheduled_for' => ['nullable', 'date', 'after:now', 'before:'.now()->addDays(30)->toIso8601String()],
+            'payment_method' => ['nullable', 'string', 'in:cod,card_on_delivery,stripe,bank_transfer'],
+            'promo_code' => ['nullable', 'string', 'max:40'],
+            'tip_amount' => ['nullable', 'numeric', 'min:0'],
+            'items' => ['required', 'array', 'between:1,100'],
+            'items.*.menu_id' => ['required', 'integer'], 'items.*.quantity' => ['required', 'integer', 'between:1,50'],
+            'items.*.comment' => ['nullable', 'string', 'max:300'], 'items.*.options' => ['nullable', 'array', 'max:50'],
+            'items.*.options.*.option_id' => ['required', 'integer'], 'items.*.options.*.values' => ['required', 'array', 'max:50'],
+            'items.*.options.*.values.*.value_id' => ['required', 'integer'], 'items.*.options.*.values.*.quantity' => ['nullable', 'integer', 'between:1,50'],
+        ]);
+        abort_unless($this->settings->boolean('orders_enabled', true, (int)$data['location_id']), 403, 'Online ordering is not enabled for this location.');
+        abort_unless($this->settings->boolean($data['order_type'].'_enabled', true, (int)$data['location_id']), 422, ucfirst($data['order_type']).' ordering is not enabled for this restaurant.');
+        $this->assertScheduleAvailable($data);
+        $quote = $this->buildQuote($data, $this->tenant->get()->settings()->pluck('value', 'key')->all());
+        return response()->json(['data' => $quote['payload']]);
     }
 
     public function createOrder(Request $request): JsonResponse
@@ -109,12 +233,14 @@ class StorefrontCommerceController extends Controller
         $data = $request->validate([
             'location_id' => ['required', 'integer', Rule::exists('locations', 'location_id')->where('restaurant_id', $this->tenant->id())],
             'order_type' => ['required', Rule::in(['delivery', 'collection'])],
+            'scheduled_for' => ['nullable', 'date', 'after:now', 'before:'.now()->addDays(30)->toIso8601String()],
             'first_name' => ['required', 'string', 'between:1,48'],
             'last_name' => ['required', 'string', 'between:1,48'],
             'email' => [$customer ? 'nullable' : 'required', 'email', 'max:96'],
             'telephone' => ['required', 'string', 'max:64'],
             'comment' => ['nullable', 'string', 'max:500'],
-            'payment_method' => ['nullable', 'string', 'in:cod,card_on_delivery,stripe,paypal,bank_transfer'],
+            'payment_method' => ['nullable', 'string', 'in:cod,card_on_delivery,stripe,bank_transfer'],
+            'promo_code' => ['nullable', 'string', 'max:40'],
             'tip_amount' => ['nullable', 'numeric', 'min:0'],
             'items' => ['required', 'array', 'between:1,100'],
             'items.*.menu_id' => ['required', 'integer'],
@@ -153,8 +279,11 @@ class StorefrontCommerceController extends Controller
             422,
             ucfirst($data['order_type']).' ordering is not enabled for this restaurant.',
         );
+        $this->assertScheduleAvailable($data);
 
         return $this->idempotency->run($request, 'storefront.order.create', function () use ($request, $customer, $data, $settings): array {
+            // Re-run the same validation and total calculation exposed by /orders/quote.
+            $quote = $this->buildQuote($data, $settings);
             $location = Location::query()->where('restaurant_id', $this->tenant->id())->findOrFail($data['location_id']);
             $menuIds = collect($data['items'])->pluck('menu_id')->unique()->values();
             $menus = Menu::query()->with(['menu_options.menu_option_values.option_value'])
@@ -162,6 +291,7 @@ class StorefrontCommerceController extends Controller
                 ->where('menu_status', true)->whereIn('menu_id', $menuIds)->get()->keyBy('menu_id');
             abort_unless($menus->count() === $menuIds->count(), 422, 'One or more menu items are unavailable.');
 
+            $scheduledFor = isset($data['scheduled_for']) ? Carbon::parse($data['scheduled_for'], $this->tenant->get()->timezone ?: 'Europe/Zurich') : null;
             $order = new Order;
             $order->fill([
                 'customer_id' => $customer->getKey(),
@@ -175,9 +305,9 @@ class StorefrontCommerceController extends Controller
                 'comment' => $data['comment'] ?? null,
                 'payment' => $data['payment_method'] ?? 'cod',
                 'status_id' => $this->settings->integer('default_order_status_id', (int) setting('default_order_status'), (int) $data['location_id']),
-                'order_date' => now()->toDateString(),
-                'order_time' => now()->format('H:i'),
-                'order_time_is_asap' => true,
+                'order_date' => ($scheduledFor ?: now())->toDateString(),
+                'order_time' => ($scheduledFor ?: now())->format('H:i'),
+                'order_time_is_asap' => !$scheduledFor,
             ]);
             if ($data['order_type'] === 'delivery') {
                 $address = $customer->addresses()->create([...$data['address'], 'restaurant_id' => $this->tenant->id()]);
@@ -219,7 +349,7 @@ class StorefrontCommerceController extends Controller
             $taxRate = (float)($settings['tax_rate'] ?? 0);
             $taxAmount = $taxRate > 0 ? round($subtotal * ($taxRate / 100), 2) : 0.0;
             $tipAmount = isset($data['tip_amount']) ? (float)$data['tip_amount'] : 0.0;
-            $total = $subtotal + $deliveryFee + $taxAmount + $tipAmount;
+            $total = $quote['payload']['total'];
 
             $order->forceFill([
                 'total_items' => collect($items)->sum('qty'),
@@ -277,6 +407,13 @@ class StorefrontCommerceController extends Controller
                 }
             }
 
+            // A Stripe order is only accepted when the provider session exists. Throwing inside
+            // the idempotent database transaction rolls back the provisional order, allowing a
+            // recoverable retry with the same cart and idempotency key.
+            if (($data['payment_method'] ?? '') === 'stripe' && !$checkoutUrl) {
+                abort(502, 'We could not start the card payment. Your cart has been kept so you can try again.');
+            }
+
             $orderPayload = $this->orderData($order->fresh(['status', 'location', 'menus.menu_options', 'status_history.status']));
             if ($checkoutUrl) {
                 $orderPayload['checkout_url'] = $checkoutUrl;
@@ -290,6 +427,18 @@ class StorefrontCommerceController extends Controller
     {
         $settings = $this->tenant->get()->settings()->pluck('value', 'key')->all();
         $payload = $request->getContent();
+        $secret = trim((string)($settings['payments_stripe_webhook_secret'] ?? ''));
+        abort_if($secret === '', 503, 'Stripe webhook verification is not configured.');
+        $signature = (string)$request->header('Stripe-Signature');
+        $parts = collect(explode(',', $signature))->mapWithKeys(function (string $part): array {
+            [$key, $value] = array_pad(explode('=', trim($part), 2), 2, '');
+            return [$key => $value];
+        });
+        $timestamp = $parts->get('t');
+        $received = $parts->get('v1');
+        abort_unless($timestamp && $received && abs(time() - (int)$timestamp) <= 300, 400, 'Invalid Stripe signature.');
+        $expected = hash_hmac('sha256', $timestamp.'.'.$payload, $secret);
+        abort_unless(hash_equals($expected, $received), 400, 'Invalid Stripe signature.');
         $event = json_decode($payload, true);
 
         if (!$event || !isset($event['type'])) {
@@ -377,6 +526,81 @@ class StorefrontCommerceController extends Controller
         });
     }
 
+    private function buildQuote(array $data, array $settings): array
+    {
+        $this->assertPaymentMethodAvailable((string)($data['payment_method'] ?? 'cod'), $settings);
+        $location = Location::query()->where('restaurant_id', $this->tenant->id())->findOrFail($data['location_id']);
+        $menuIds = collect($data['items'])->pluck('menu_id')->unique()->values();
+        $menus = Menu::query()->with(['menu_options.menu_option_values.option_value'])
+            ->where('restaurant_id', $this->tenant->id())->where('menu_status', true)->whereIn('menu_id', $menuIds)->get()->keyBy('menu_id');
+        abort_unless($menus->count() === $menuIds->count(), 422, 'One or more menu items are unavailable.');
+        $items = collect($data['items'])->map(function (array $item) use ($menus): CartItem {
+            $menu = $menus->get($item['menu_id']);
+            $cartItem = new CartItem($menu->getKey(), $menu->menu_name, (float)$menu->menu_price,
+                $this->prepareMenuOptions($menu, $item['options'] ?? []), $item['comment'] ?? '');
+            $cartItem->setQuantity((int)$item['quantity']);
+            return $cartItem;
+        })->all();
+        $subtotal = collect($items)->sum(fn(CartItem $item) => $item->subtotal());
+        if ($data['order_type'] === 'delivery') {
+            $minimum = (float)$this->settings->get('min_delivery_order', 0.0, (int)$location->getKey());
+            abort_unless($minimum <= 0 || $subtotal >= $minimum, 422, sprintf('Minimum order amount for delivery is %.2f.', $minimum));
+        }
+        $deliveryFee = $data['order_type'] === 'delivery' ? (float)$this->settings->get('delivery_charge', 0.0, (int)$location->getKey()) : 0.0;
+        $taxRate = (float)($settings['tax_rate'] ?? 0);
+        $tax = $taxRate > 0 ? round($subtotal * ($taxRate / 100), 2) : 0.0;
+        $tip = (float)($data['tip_amount'] ?? 0);
+        $discount = 0.0;
+        $offerCode = strtoupper(trim((string)($data['promo_code'] ?? '')));
+        if ($offerCode !== '') {
+            $offer = StorefrontOffer::query()->where('restaurant_id', $this->tenant->id())->where('code', $offerCode)->where('active', true)
+                ->where(fn($query) => $query->whereNull('starts_at')->orWhere('starts_at', '<=', now()))
+                ->where(fn($query) => $query->whereNull('ends_at')->orWhere('ends_at', '>=', now()))->first();
+            abort_unless($offer, 422, 'This offer is not available.');
+            abort_unless($subtotal >= (float)$offer->minimum_order, 422, sprintf('This offer requires an order of at least %.2f.', $offer->minimum_order));
+            $discount = $offer->type === 'percent' ? round($subtotal * ((float)$offer->amount / 100), 2) : (float)$offer->amount;
+            $discount = min($discount, $subtotal);
+        }
+        return ['location' => $location, 'items' => $items, 'payload' => [
+            'subtotal' => round($subtotal, 2), 'delivery_fee' => round($deliveryFee, 2), 'tax' => $tax,
+            'tip' => round($tip, 2), 'discount' => round($discount, 2), 'offer_code' => $offerCode ?: null,
+            'total' => round(max(0, $subtotal + $deliveryFee + $tax + $tip - $discount), 2),
+            'currency' => strtoupper((string)($this->tenant->get()->currency_code ?: 'CHF')),
+        ]];
+    }
+
+    private function assertScheduleAvailable(array $data): void
+    {
+        if (empty($data['scheduled_for'])) return;
+        $locationId = (int)$data['location_id'];
+        $timezone = $this->tenant->get()->timezone ?: 'Europe/Zurich';
+        $scheduled = Carbon::parse($data['scheduled_for'], $timezone);
+        $startHour = $this->settings->integer('scheduled_order_start_hour', 10, $locationId);
+        $endHour = $this->settings->integer('scheduled_order_end_hour', 22, $locationId);
+        abort_unless($scheduled->hour >= $startHour && $scheduled->hour < $endHour, 422, 'The selected time is outside this restaurant’s ordering hours.');
+        $lead = $this->settings->integer($data['order_type'] === 'delivery' ? 'delivery_lead_time_minutes' : 'prep_time_minutes', 30, $locationId);
+        abort_unless($scheduled->greaterThanOrEqualTo(now($timezone)->addMinutes(max(5, $lead))), 422, 'The selected time is no longer available.');
+    }
+
+    private function ownedOrder(Request $request, int $orderId): Order
+    {
+        return Order::query()->with(['status', 'location', 'menus.menu_options', 'status_history.status'])
+            ->where('restaurant_id', $this->tenant->id())->where('customer_id', $this->customer($request)->getKey())->findOrFail($orderId);
+    }
+
+    private function assertPaymentMethodAvailable(string $method, array $settings): void
+    {
+        $available = match ($method) {
+            'cod' => filter_var($settings['payments_cod_enabled'] ?? true, FILTER_VALIDATE_BOOLEAN),
+            'card_on_delivery' => filter_var($settings['payments_card_on_delivery_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'stripe' => filter_var($settings['payments_stripe_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN)
+                && !empty($settings['payments_stripe_publishable_key']) && !empty($settings['payments_stripe_secret_key']),
+            'bank_transfer' => filter_var($settings['payments_bank_transfer_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            default => false,
+        };
+        abort_unless($available, 422, 'The selected payment method is not available.');
+    }
+
     private function customer(Request $request, bool $allowGuest = false): ?Customer
     {
         /** @var Customer|null $customer */
@@ -392,8 +616,9 @@ class StorefrontCommerceController extends Controller
 
     private function orderData(Order $order): array
     {
+        $cancelled = (bool)$order->cancelled_at;
         return ['id' => (int)$order->getKey(), 'number' => '#'.$order->getKey(), 'type' => $order->order_type,
-            'status' => ['id' => (int)$order->status_id, 'name' => $order->status_name ?? 'Received', 'color' => $order->status_color],
+            'status' => ['id' => (int)$order->status_id, 'name' => $cancelled ? 'Cancelled' : ($order->status_name ?? 'Received'), 'color' => $cancelled ? '#b42318' : $order->status_color],
             'total' => (float)$order->order_total, 'items_count' => (int)$order->total_items,
             'items' => $order->menus->map(fn($item) => [
                 'name' => $item->name,
@@ -409,7 +634,9 @@ class StorefrontCommerceController extends Controller
                 'comment' => $history->comment,
                 'created_at' => $history->created_at?->toIso8601String(),
             ])->values(),
-            'location' => $order->location?->location_name, 'created_at' => $order->created_at?->toIso8601String()];
+            'location' => $order->location?->location_name, 'created_at' => $order->created_at?->toIso8601String(),
+            'cancelled_at' => $order->cancelled_at?->toIso8601String(), 'cancel_reason' => $order->cancel_reason,
+            'payment_state' => $order->payment === 'stripe' ? ($order->processed ? 'paid' : 'pending') : 'pay_at_restaurant'];
     }
 
     private function prepareMenuOptions(Menu $menu, array $requested): array

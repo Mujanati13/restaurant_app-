@@ -19,7 +19,6 @@ const { data: categories } = await useFetch<{ data: Category[] }>('/api/v1/store
 
 const { data: locationData } = await useFetch<{ data: import('~/types/storefront').Location[] }>('/api/v1/storefront/locations', { headers, immediate: !isMarketplace.value })
 const restaurantLocations = computed(() => locationData.value?.data || [])
-const cart = useTenantCart()
 const selectedCategoryId = ref<number | null>(null)
 
 const filteredMenu = computed(() => {
@@ -178,7 +177,6 @@ const coverPhoto = computed(() => {
                 :key="item.id"
                 :item="item"
                 :currency="currencyCode"
-                @add="cart.add"
               />
             </div>
 

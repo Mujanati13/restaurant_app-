@@ -1,0 +1,6 @@
+# Copy this file to key.properties and replace every value with your release-key details.
+# Keep key.properties and the keystore outside source control.
+storeFile=C:\\path\\to\\vondo-release.jks
+storePassword=CHANGE_ME
+keyAlias=CHANGE_ME
+keyPassword=CHANGE_ME

@@ -6,19 +6,6 @@ const props = defineProps<{
   currency: string
 }>()
 
-const emit = defineEmits<{
-  add: [item: MenuItem]
-}>()
-
-const isAdded = ref(false)
-
-function handleAdd() {
-  emit('add', props.item)
-  isAdded.value = true
-  setTimeout(() => {
-    isAdded.value = false
-  }, 1200)
-}
 
 const formattedPrice = computed(() => {
   try {
@@ -70,17 +57,9 @@ const formattedPrice = computed(() => {
           <span class="price-label">Price</span>
           <strong class="menu-item-price">{{ formattedPrice }}</strong>
         </div>
-        <button
-          class="btn primary small card-add-btn"
-          :class="{ 'btn-added': isAdded }"
-          type="button"
-          :aria-label="`Add ${item.name} to cart`"
-          @click="handleAdd"
-        >
-          <i v-if="isAdded" class="ri-check-line" />
-          <i v-else class="ri-shopping-bag-3-line" />
-          <span>{{ isAdded ? 'Added' : 'Add to cart' }}</span>
-        </button>
+        <NuxtLink class="btn primary small card-add-btn" :to="`/menu/${item.id}`" :aria-label="`Customize ${item.name}`">
+          <i class="ri-add-line" /><span>Customize</span>
+        </NuxtLink>
       </div>
     </div>
   </article>

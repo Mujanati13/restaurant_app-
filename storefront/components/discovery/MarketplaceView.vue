@@ -13,10 +13,14 @@ const {
   gpsStatus,
   gpsError,
   radiusKm,
+  minRating,
+  maxDeliveryFee,
+  openNow,
+  sort,
 } = useDiscovery()
 
 const page = ref(1)
-watch([selectedCoordinates, searchQuery, selectedCuisine, orderType, radiusKm], () => { page.value = 1 }, { flush: 'sync' })
+watch([selectedCoordinates, searchQuery, selectedCuisine, orderType, radiusKm, minRating, maxDeliveryFee, openNow, sort], () => { page.value = 1 }, { flush: 'sync' })
 
 // Fetch Cuisines
 const { data: cuisinesData } = await useFetch<{ data: CuisineItem[] }>('/api/v1/discovery/cuisines')
@@ -28,6 +32,7 @@ const queryParams = computed(() => {
     order_type: orderType.value,
     page: page.value,
     radius_km: radiusKm.value,
+    sort: sort.value,
   }
   if (selectedCoordinates.value) {
     p.latitude = selectedCoordinates.value.lat
@@ -39,6 +44,9 @@ const queryParams = computed(() => {
   if (selectedCuisine.value) {
     p.cuisine = selectedCuisine.value
   }
+  if (minRating.value) p.min_rating = minRating.value
+  if (maxDeliveryFee.value !== null) p.max_delivery_fee = maxDeliveryFee.value
+  if (openNow.value) p.open_now = true
   return p
 })
 
@@ -195,6 +203,12 @@ const handleUseGpsHero = async () => {
           <select v-model.number="radiusKm"><option :value="10">10 km</option><option :value="25">25 km</option><option :value="50">50 km</option></select>
         </label>
         <!-- Results Controls Bar -->
+        <div class="discovery-filters" aria-label="Restaurant filters">
+          <label>Sort<select v-model="sort"><option value="recommended">Recommended</option><option value="rating">Top rated</option><option value="delivery_fee">Lowest delivery fee</option><option value="eta">Fastest delivery</option><option v-if="selectedCoordinates" value="distance">Nearest</option></select></label>
+          <label>Rating<select v-model="minRating"><option :value="null">Any rating</option><option :value="4">4.0+</option><option :value="4.5">4.5+</option></select></label>
+          <label>Delivery fee<select v-model="maxDeliveryFee"><option :value="null">Any fee</option><option :value="0">Free delivery</option><option :value="3.5">Up to CHF 3.50</option></select></label>
+          <label class="open-now-filter"><input v-model="openNow" type="checkbox"> Open now</label>
+        </div>
         <div class="results-toolbar">
           <div class="results-heading-wrap">
             <h2 class="results-title">
@@ -297,6 +311,10 @@ const handleUseGpsHero = async () => {
   min-height: 80vh;
   background-color: #ffffff;
 }
+.discovery-filters { display:flex; flex-wrap:wrap; gap:.65rem; margin:0 0 1rem; }
+.discovery-filters label { display:flex; align-items:center; gap:.35rem; padding:.45rem .65rem; border:1px solid #ddd; border-radius:8px; background:#fff; font-size:.86rem; font-weight:600; }
+.discovery-filters select { border:0; background:transparent; min-width:0; }
+.open-now-filter { cursor:pointer; }
 
 /* ===== HERO ===== */
 .marketplace-hero {

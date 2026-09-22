@@ -4,6 +4,7 @@ import { useActiveTenant, tenantHref } from '~/composables/useTenant'
 const tenant = useActiveTenant()
 const cart = useTenantCart()
 const mobileOpen = ref(false)
+const cartOpen = ref(false)
 const route = useRoute()
 const orderContext = useCookie<{ location: number; orderType: string } | null>('deliveriano-order-' + (tenant.value?.restaurant.id || 'none'), { sameSite: 'lax', maxAge: 3600 })
 watchEffect(() => {
@@ -87,11 +88,11 @@ const rootStyle = computed(() => ({
           <NuxtLink :to="tenantHref('/account')" @click="mobileOpen = false">
             <i class="ri-user-3-line" /> Account
           </NuxtLink>
-          <NuxtLink class="cart-link" :to="tenantHref('/checkout')" @click="mobileOpen = false">
+          <button class="cart-link cart-button" type="button" :aria-expanded="cartOpen" aria-controls="cart-drawer" @click="cartOpen = true; mobileOpen = false">
             <i class="ri-shopping-bag-3-line" />
             <span>Cart</span>
             <span class="cart-count">{{ cart.count }}</span>
-          </NuxtLink>
+          </button>
         </nav>
       </div>
     </header>
@@ -99,6 +100,26 @@ const rootStyle = computed(() => ({
     <main id="main-content">
       <slot />
     </main>
+
+    <div v-if="cartOpen" class="cart-backdrop" @click.self="cartOpen = false">
+      <aside id="cart-drawer" class="cart-drawer" role="dialog" aria-modal="true" aria-label="Your cart" tabindex="-1" @keydown.esc="cartOpen = false">
+        <div class="cart-drawer-head"><h2>Your order</h2><button class="icon-btn" type="button" aria-label="Close cart" @click="cartOpen = false">×</button></div>
+        <p v-if="!cart.lines.value.length">Your cart is empty. Add a dish to get started.</p>
+        <div v-else class="cart-drawer-lines">
+          <article v-for="line in cart.lines.value" :key="line.line_id">
+            <div><strong>{{ line.name }}</strong><small v-if="line.note">{{ line.note }}</small><small>{{ line.quantity }} × {{ Number(line.price).toFixed(2) }}</small></div>
+            <div class="cart-line-actions"><button type="button" aria-label="Decrease quantity" @click="cart.setQuantity(line.line_id, line.quantity - 1)">−</button><span>{{ line.quantity }}</span><button type="button" aria-label="Increase quantity" @click="cart.setQuantity(line.line_id, line.quantity + 1)">+</button></div>
+          </article>
+          <div class="cart-drawer-total"><strong>Subtotal</strong><strong>{{ tenant.currency.symbol }}{{ cart.subtotal.value.toFixed(2) }}</strong></div>
+          <NuxtLink class="btn primary" :to="tenantHref('/checkout')" @click="cartOpen = false">Go to checkout</NuxtLink>
+        </div>
+      </aside>
+    </div>
+
+    <NuxtLink v-if="cart.count.value" class="mobile-cart-bar" :to="tenantHref('/checkout')">
+      <span><i class="ri-shopping-bag-3-line" /> {{ cart.count.value }} item{{ cart.count.value === 1 ? '' : 's' }}</span>
+      <strong>View cart</strong>
+    </NuxtLink>
 
     <!-- Multi-Column Restaurant Footer -->
     <footer class="site-footer">
@@ -155,3 +176,23 @@ const rootStyle = computed(() => ({
     </footer>
   </div>
 </template>
+
+<style scoped>
+.cart-button { border:0; cursor:pointer; font:inherit; }
+.cart-backdrop { position:fixed; inset:0; z-index:100; background:rgba(0,0,0,.42); display:flex; justify-content:flex-end; }
+.cart-drawer { width:min(420px,100%); height:100%; overflow:auto; padding:1.25rem; background:#fff; color:#1f1a17; box-shadow:-12px 0 32px rgba(0,0,0,.2); }
+.cart-drawer-head,.cart-drawer-total,.cart-drawer-lines article,.cart-line-actions { display:flex; align-items:center; }
+.cart-drawer-head,.cart-drawer-total { justify-content:space-between; gap:.75rem; }
+.cart-drawer-head { border-bottom:1px solid #eee; padding-bottom:1rem; }
+.cart-drawer-head h2 { margin:0; }
+.cart-drawer-lines { display:grid; gap:.9rem; margin-top:1rem; }
+.cart-drawer-lines article { justify-content:space-between; gap:1rem; border-bottom:1px solid #eee; padding-bottom:.85rem; }
+.cart-drawer-lines small { display:block; color:#655d56; margin-top:.2rem; }
+.cart-line-actions { gap:.55rem; }
+.cart-line-actions button { width:2rem; height:2rem; border:1px solid #d9d4d0; border-radius:50%; background:#fff; font-size:1.1rem; cursor:pointer; }
+.cart-drawer-total { padding-top:.4rem; font-size:1.05rem; }
+.mobile-cart-bar { display:none; }
+@media (max-width: 768px) {
+  .mobile-cart-bar { position:fixed; z-index:60; right:1rem; bottom:1rem; left:1rem; display:flex; align-items:center; justify-content:space-between; padding:1rem 1.15rem; border-radius:14px; background:#000; color:#fff; box-shadow:0 12px 32px rgba(0,0,0,.28); font-weight:700; }
+}
+</style>

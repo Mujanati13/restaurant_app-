@@ -90,6 +90,8 @@ const money = (value: number) => new Intl.NumberFormat('de-CH', { style: 'curren
 
       <!-- Fulfilment & Pricing Footer -->
       <div class="card-meta-footer">
+        <div v-if="restaurant.rating" class="meta-item"><i class="ri-star-fill" /> <span>{{ restaurant.rating }} <small v-if="restaurant.review_count">({{ restaurant.review_count }})</small></span></div>
+        <span v-if="restaurant.rating" class="meta-dot">•</span>
         <div v-if="orderType === 'delivery'" class="meta-item">
           <i class="ri-e-bike-2-line" />
           <span>

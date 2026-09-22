@@ -64,20 +64,15 @@ class StorefrontTenantController extends Controller
                 'instructions' => $rawSettings['payments_card_on_delivery_notes'] ?? 'Our courier will bring a mobile contactless card reader.',
             ];
         }
-        if (filter_var($rawSettings['payments_stripe_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN) && !empty($rawSettings['payments_stripe_publishable_key'])) {
+        if (filter_var($rawSettings['payments_stripe_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN)
+            && !empty($rawSettings['payments_stripe_publishable_key'])
+            && !empty($rawSettings['payments_stripe_secret_key'])
+            && !empty($rawSettings['payments_stripe_webhook_secret'])) {
             $paymentMethods[] = [
                 'code' => 'stripe',
                 'name' => 'Credit / Debit Card (Stripe)',
                 'publishable_key' => $rawSettings['payments_stripe_publishable_key'],
                 'test_mode' => filter_var($rawSettings['payments_stripe_test_mode'] ?? true, FILTER_VALIDATE_BOOLEAN),
-            ];
-        }
-        if (filter_var($rawSettings['payments_paypal_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN) && !empty($rawSettings['payments_paypal_client_id'])) {
-            $paymentMethods[] = [
-                'code' => 'paypal',
-                'name' => 'PayPal',
-                'client_id' => $rawSettings['payments_paypal_client_id'],
-                'sandbox' => filter_var($rawSettings['payments_paypal_sandbox'] ?? true, FILTER_VALIDATE_BOOLEAN),
             ];
         }
         if (filter_var($rawSettings['payments_bank_transfer_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN)) {

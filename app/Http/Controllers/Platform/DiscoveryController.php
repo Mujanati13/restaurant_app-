@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Platform;
 
 use App\Platform\Branding\BrandConfiguration;
 use App\Platform\Models\Restaurant;
+use App\Platform\Models\StorefrontReview;
 use App\Platform\Support\TenantSettings;
 use Igniter\Flame\Geolite\Facades\Geocoder;
 use Igniter\Flame\Geolite\Model\Coordinates;
@@ -29,6 +30,10 @@ class DiscoveryController extends Controller
             'search' => ['nullable', 'string', 'max:100'],
             'cuisine' => ['nullable', 'string', 'max:50'],
             'radius_km' => ['nullable', 'numeric', 'min:1', 'max:100'],
+            'min_rating' => ['nullable', 'numeric', 'min:1', 'max:5'],
+            'max_delivery_fee' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'open_now' => ['nullable', 'boolean'],
+            'sort' => ['nullable', 'string', 'in:recommended,rating,delivery_fee,eta,distance'],
             'page' => ['nullable', 'integer', 'min:1'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
         ]);
@@ -42,6 +47,10 @@ class DiscoveryController extends Controller
         $radiusKm = isset($validated['radius_km']) ? (float)$validated['radius_km'] : ($orderType === 'collection' ? 10.0 : 30.0);
         $page = (int)($validated['page'] ?? 1);
         $limit = (int)($validated['limit'] ?? 12);
+        $minRating = isset($validated['min_rating']) ? (float)$validated['min_rating'] : null;
+        $maxDeliveryFee = isset($validated['max_delivery_fee']) ? (float)$validated['max_delivery_fee'] : null;
+        $openNow = array_key_exists('open_now', $validated) ? filter_var($validated['open_now'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) : null;
+        $sort = $validated['sort'] ?? 'recommended';
 
         // Fetch active restaurants with discovery enabled
         $restaurants = Restaurant::query()
@@ -49,6 +58,8 @@ class DiscoveryController extends Controller
             ->where('discovery_enabled', true)
             ->with(['brandRevisions' => fn($q) => $q->whereNotNull('published_at')->latest('published_at')])
             ->get();
+        $ratings = StorefrontReview::query()->whereIn('restaurant_id', $restaurants->pluck('id'))
+            ->selectRaw('restaurant_id, AVG(rating) as average_rating, COUNT(*) as review_count')->groupBy('restaurant_id')->get()->keyBy('restaurant_id');
 
         $baseDomain = strtolower((string)config('vondo.base_domain', 'deliveriano.ch'));
         $results = collect();
@@ -200,6 +211,14 @@ class DiscoveryController extends Controller
             $deliveryLeadTime = $this->settings->integerForRestaurant($restaurantId, 'delivery_lead_time_minutes', 35, $locationId);
             $deliveryCharge = (float)$this->settings->getForRestaurant($restaurantId, 'delivery_charge', 0.0, $locationId);
             $minDeliveryOrder = (float)$this->settings->getForRestaurant($restaurantId, 'min_delivery_order', 0.0, $locationId);
+            $rating = $ratings->get($restaurantId);
+            $averageRating = $rating ? round((float)$rating->average_rating, 1) : null;
+
+            if (($minRating !== null && ($averageRating === null || $averageRating < $minRating))
+                || ($maxDeliveryFee !== null && $deliveryCharge > $maxDeliveryFee)
+                || ($openNow === true && $isOpen !== true)) {
+                continue;
+            }
 
             $results->push([
                 'id' => $restaurant->public_id,
@@ -210,6 +229,8 @@ class DiscoveryController extends Controller
                 'cover_photo_url' => $coverPhoto,
                 'logo_url' => $logoUrl,
                 'subdomain_url' => 'https://' . $restaurant->slug . '.' . $baseDomain,
+                'rating' => $averageRating,
+                'review_count' => $rating ? (int)$rating->review_count : 0,
                 'currency_code' => $restaurant->currency_code ?: 'CHF',
                 'currency_symbol' => $restaurant->currency_code === 'EUR' ? '€' : 'CHF ',
                 'selected_location' => [
@@ -231,12 +252,13 @@ class DiscoveryController extends Controller
             ]);
         }
 
-        // Sort: nearest-first if coordinates available, otherwise by name
-        if ($hasCoordinates) {
-            $sorted = $results->sortBy('selected_location.distance_km')->values();
-        } else {
-            $sorted = $results->sortBy('name')->values();
-        }
+        $sortField = match ($sort) {
+            'rating' => 'rating', 'delivery_fee' => 'selected_location.delivery_charge', 'eta' => 'selected_location.estimated_minutes',
+            'distance' => 'selected_location.distance_km', default => $hasCoordinates ? 'selected_location.distance_km' : 'name',
+        };
+        $sorted = $sort === 'rating'
+            ? $results->sortByDesc(fn(array $item) => $item['rating'] ?? 0)->values()
+            : $results->sortBy(fn(array $item) => data_get($item, $sortField) ?? PHP_FLOAT_MAX)->values();
 
         // Paginate in-memory collection
         $total = $sorted->count();

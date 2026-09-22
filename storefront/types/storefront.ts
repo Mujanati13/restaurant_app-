@@ -59,6 +59,9 @@ export interface TenantBootstrap {
 }
 
 export interface MenuItem { id: number; name: string; description?: string; price: number; image?: string; category_ids?: number[]; is_special?: boolean }
+export interface MenuOptionValue { id: number; name: string; price: number; is_default?: boolean }
+export interface MenuOption { id: number; name: string; display_type: 'radio' | 'checkbox' | 'quantity'; required: boolean; min_selected: number; max_selected: number; values: MenuOptionValue[] }
+export interface MenuDetail extends MenuItem { options: MenuOption[] }
 export interface Category { id: number; name: string; description?: string; slug?: string }
 export interface Location {
   id: number
@@ -76,4 +79,4 @@ export interface Location {
   prep_time_minutes?: number
   delivery_lead_time_minutes?: number
 }
-
+export interface FulfillmentSlots { timezone: string; asap: string; slots: string[] }
