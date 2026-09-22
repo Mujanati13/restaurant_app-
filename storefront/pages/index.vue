@@ -87,6 +87,10 @@ const offersPickup = computed(() => restaurantLocations.value.some(location => l
         <div v-else class="hero-cover-fallback" />
 
         <div class="container hero-inner">
+          <div class="hero-cover-context">
+            <span><i class="ri-map-pin-2-line" /> {{ brand.identity?.tagline || 'Discover a local favourite' }}</span>
+            <span class="hero-cover-context-note"><i class="ri-heart-3-line" /> Order directly from the restaurant</span>
+          </div>
           <div class="hero-card-surface">
             <div class="restaurant-identity-header">
               <img
@@ -109,10 +113,15 @@ const offersPickup = computed(() => restaurantLocations.value.some(location => l
                   <i class="ri-map-pin-2-line" />
                   <span>{{ tenant.restaurant.address }}</span>
                 </div>
+                <div class="restaurant-service-summary">
+                  <span v-if="offersDelivery"><i class="ri-e-bike-2-line" /> Delivery available</span>
+                  <span v-if="offersPickup"><i class="ri-shopping-bag-3-line" /> Pickup available</span>
+                </div>
               </div>
             </div>
 
             <div class="hero-order-panel">
+              <p class="hero-order-kicker">Ready when you are</p>
               <div class="hero-service-pills" aria-label="Available services">
                 <span v-if="offersDelivery"><i class="ri-e-bike-2-line" /> Delivery</span>
                 <span v-if="offersPickup"><i class="ri-shopping-bag-3-line" /> Pickup</span>
@@ -296,10 +305,10 @@ const offersPickup = computed(() => restaurantLocations.value.some(location => l
 <style scoped>
 .restaurant-hero {
   position: relative;
-  min-height: 470px;
+  min-height: 540px;
   display: flex;
   align-items: flex-end;
-  padding: 4.5rem 0 2.5rem;
+  padding: 2.5rem 0;
   background-color: #29231f;
   overflow: hidden;
 }
@@ -314,7 +323,9 @@ const offersPickup = computed(() => restaurantLocations.value.some(location => l
 .hero-cover-overlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, rgba(20, 18, 16, 0.66) 0%, rgba(20, 18, 16, 0.18) 62%, rgba(20, 18, 16, 0.42) 100%);
+  background:
+    linear-gradient(180deg, rgba(20, 18, 16, 0.16) 0%, rgba(20, 18, 16, 0.04) 38%, rgba(20, 18, 16, 0.7) 100%),
+    linear-gradient(90deg, rgba(20, 18, 16, 0.48) 0%, transparent 64%);
 }
 
 .hero-cover-fallback {
@@ -327,19 +338,68 @@ const offersPickup = computed(() => restaurantLocations.value.some(location => l
   position: relative;
   z-index: 2;
   width: 100%;
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.hero-cover-context {
+  display: flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 0.65rem;
+  max-width: min(100%, 580px);
+  padding: 0.55rem 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  border-radius: 999px;
+  background: rgba(24, 22, 20, 0.42);
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  backdrop-filter: blur(9px);
+}
+
+.hero-cover-context > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.hero-cover-context i {
+  color: #97f1bd;
+  font-size: 0.92rem;
+}
+
+.hero-cover-context-note {
+  padding-left: 0.65rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.35);
 }
 
 .hero-card-surface {
-  border: 1px solid rgba(255, 255, 255, 0.72);
-  border-radius: 18px;
-  padding: 1.4rem;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  border-radius: 20px;
+  padding: 1.5rem;
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.93) 72%, rgba(239, 252, 244, 0.95) 100%);
+  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.25);
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
   justify-content: space-between;
   gap: 1rem 2rem;
+}
+
+.hero-card-surface::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 5px;
+  content: '';
+  background: var(--brand-primary, #06c167);
 }
 
 .restaurant-identity-header {
@@ -395,6 +455,27 @@ const offersPickup = computed(() => restaurantLocations.value.some(location => l
   color: #665c52;
 }
 
+.restaurant-service-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.85rem;
+  margin-top: 0.6rem;
+}
+
+.restaurant-service-summary span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: #466151;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.restaurant-service-summary i {
+  color: var(--brand-primary, #06c167);
+  font-size: 0.95rem;
+}
+
 .restaurant-location-info {
   display: flex;
   align-items: center;
@@ -408,6 +489,16 @@ const offersPickup = computed(() => restaurantLocations.value.some(location => l
   flex-direction: column;
   align-items: flex-end;
   gap: 0.75rem;
+  padding: 0.25rem;
+}
+
+.hero-order-kicker {
+  margin: 0;
+  color: #56655c;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .hero-service-pills {
@@ -423,7 +514,7 @@ const offersPickup = computed(() => restaurantLocations.value.some(location => l
   gap: 0.3rem;
   padding: 0.35rem 0.55rem;
   border-radius: 999px;
-  background: #f4f7f5;
+  background: #edf7f0;
   color: #4a554e;
   font-size: 0.72rem;
   font-weight: 700;
@@ -444,7 +535,8 @@ const offersPickup = computed(() => restaurantLocations.value.some(location => l
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.8rem 1.15rem;
+  min-height: 48px;
+  padding: 0.8rem 1.2rem;
   font-size: 0.95rem;
   font-weight: 600;
   border-radius: 12px;
@@ -635,8 +727,8 @@ const offersPickup = computed(() => restaurantLocations.value.some(location => l
 
 @media (max-width: 768px) {
   .restaurant-hero {
-    min-height: 410px;
-    padding-top: 3rem;
+    min-height: 500px;
+    padding: 1.5rem 0;
   }
   .contact-hours-grid {
     grid-template-columns: 1fr;
@@ -644,6 +736,12 @@ const offersPickup = computed(() => restaurantLocations.value.some(location => l
   .hero-card-surface {
     padding: 1.25rem;
     grid-template-columns: 1fr;
+  }
+  .hero-inner {
+    min-height: 440px;
+  }
+  .hero-cover-context {
+    max-width: 100%;
   }
   .restaurant-identity-header {
     flex-direction: column;
@@ -664,12 +762,27 @@ const offersPickup = computed(() => restaurantLocations.value.some(location => l
 
 @media (max-width: 480px) {
   .restaurant-hero {
-    min-height: 440px;
-    padding-bottom: 1.25rem;
+    min-height: 510px;
+    padding-bottom: 1rem;
   }
   .hero-card-surface {
     border-radius: 14px;
     padding: 1rem;
+  }
+  .hero-inner {
+    min-height: 470px;
+  }
+  .hero-cover-context {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.35rem;
+    border-radius: 12px;
+  }
+  .hero-cover-context-note {
+    padding-top: 0.35rem;
+    padding-left: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.35);
+    border-left: 0;
   }
   .hero-actions-row {
     flex-direction: column;
