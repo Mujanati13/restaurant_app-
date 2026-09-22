@@ -76,6 +76,41 @@ const toggleOrderType = (type: 'delivery' | 'collection') => {
   orderType.value = type
 }
 
+const cuisineIcons: Record<string, string> = {
+  Japanese: '🍣',
+  Bakery: '🥐',
+  Indian: '🍛',
+  Vegetarian: '🥬',
+  French: '🥖',
+  Burgers: '🍔',
+  Italian: '🍝',
+  'Middle Eastern': '🧆',
+  Thai: '🍜',
+  Pizza: '🍕',
+  Mexican: '🌮',
+  Healthy: '🥗',
+}
+
+const cuisineIcon = (name: string) => cuisineIcons[name] || '🍽️'
+
+const activeFilterCount = computed(() => [
+  searchQuery.value,
+  selectedCuisine.value,
+  minRating.value,
+  maxDeliveryFee.value,
+  openNow.value,
+  sort.value !== 'recommended',
+].filter(Boolean).length)
+
+const clearFilters = () => {
+  searchQuery.value = ''
+  selectedCuisine.value = null
+  minRating.value = null
+  maxDeliveryFee.value = null
+  openNow.value = false
+  sort.value = 'recommended'
+}
+
 const handleUseGpsHero = async () => {
   await requestGpsLocation()
 }
@@ -87,12 +122,18 @@ const handleUseGpsHero = async () => {
     <section class="marketplace-hero">
       <div class="container hero-container">
         <div class="hero-content">
+          <p class="hero-eyebrow"><i class="ri-e-bike-2-line" /> Local restaurants, one easy order</p>
           <h1 class="hero-title">
-            Order delivery<br />near you
+            Good food,<br /><span>delivered your way.</span>
           </h1>
+          <p class="hero-support">Discover nearby restaurants, choose delivery or pickup, and order in a few simple steps.</p>
 
           <!-- Address Bar -->
           <div class="hero-address-bar">
+            <div class="address-card-heading">
+              <span>Start with your address</span>
+              <span class="address-card-secure"><i class="ri-shield-check-line" /> Secure checkout</span>
+            </div>
             <!-- Delivery / Pickup Switcher -->
             <div class="fulfilment-toggle" role="tablist" aria-label="Order fulfilment type">
               <button
@@ -151,10 +192,15 @@ const handleUseGpsHero = async () => {
               </button>
             </div>
           </div>
+          <div class="hero-benefits" aria-label="Ordering benefits">
+            <span><i class="ri-store-2-line" /> Independent local kitchens</span>
+            <span><i class="ri-time-line" /> Order when it suits you</span>
+          </div>
           <p v-if="gpsError" role="alert" class="location-notice">{{ gpsError }}</p>
         </div>
         <a v-if="heroRestaurant" class="hero-food" :href="heroRestaurant.subdomain_url">
           <img :src="heroRestaurant.cover_photo_url!" :alt="heroRestaurant.name" fetchpriority="high" />
+          <span class="hero-food-caption"><i class="ri-restaurant-2-line" /> Explore local favourites</span>
         </a>
         <div v-else class="hero-editorial" aria-hidden="true">
           <i class="ri-restaurant-2-fill" />
@@ -186,7 +232,7 @@ const handleUseGpsHero = async () => {
             @click="selectCuisine(c.name)"
           >
             <span class="cuisine-icon-circle">
-              <i class="ri-restaurant-line" />
+              {{ cuisineIcon(c.name) }}
             </span>
             <span class="cuisine-label">{{ c.name }}</span>
           </button>
@@ -197,17 +243,29 @@ const handleUseGpsHero = async () => {
     <!-- Discovery Results Section -->
     <section class="results-section">
       <div class="container">
-        <p v-if="!selectedCoordinates" class="location-notice">Choose an address to check delivery coverage and see restaurants nearest to you.</p>
+        <p v-if="!selectedCoordinates" class="location-notice"><i class="ri-map-pin-2-line" /> Choose an address to check delivery coverage and see restaurants nearest to you.</p>
         <label v-if="orderType === 'collection' && selectedCoordinates" class="radius-control">
           Search within
           <select v-model.number="radiusKm"><option :value="10">10 km</option><option :value="25">25 km</option><option :value="50">50 km</option></select>
         </label>
         <!-- Results Controls Bar -->
         <div class="discovery-filters" aria-label="Restaurant filters">
-          <label>Sort<select v-model="sort"><option value="recommended">Recommended</option><option value="rating">Top rated</option><option value="delivery_fee">Lowest delivery fee</option><option value="eta">Fastest delivery</option><option v-if="selectedCoordinates" value="distance">Nearest</option></select></label>
-          <label>Rating<select v-model="minRating"><option :value="null">Any rating</option><option :value="4">4.0+</option><option :value="4.5">4.5+</option></select></label>
-          <label>Delivery fee<select v-model="maxDeliveryFee"><option :value="null">Any fee</option><option :value="0">Free delivery</option><option :value="3.5">Up to CHF 3.50</option></select></label>
-          <label class="open-now-filter"><input v-model="openNow" type="checkbox"> Open now</label>
+          <label class="filter-select">
+            <i class="ri-sort-desc" />
+            <span>Sort</span>
+            <select v-model="sort" aria-label="Sort restaurants"><option value="recommended">Recommended</option><option value="rating">Top rated</option><option value="delivery_fee">Lowest delivery fee</option><option value="eta">Fastest delivery</option><option v-if="selectedCoordinates" value="distance">Nearest</option></select>
+          </label>
+          <label class="filter-select">
+            <i class="ri-star-line" />
+            <span>Rating</span>
+            <select v-model="minRating" aria-label="Minimum rating"><option :value="null">Any rating</option><option :value="4">4.0+</option><option :value="4.5">4.5+</option></select>
+          </label>
+          <label class="filter-select">
+            <i class="ri-e-bike-2-line" />
+            <span>Delivery fee</span>
+            <select v-model="maxDeliveryFee" aria-label="Maximum delivery fee"><option :value="null">Any fee</option><option :value="0">Free delivery</option><option :value="3.5">Up to CHF 3.50</option></select>
+          </label>
+          <label class="open-now-filter"><input v-model="openNow" type="checkbox"><span>Open now</span></label>
         </div>
         <div class="results-toolbar">
           <div class="results-heading-wrap">
@@ -240,6 +298,14 @@ const handleUseGpsHero = async () => {
               <i class="ri-close-circle-fill" />
             </button>
           </div>
+          <button
+            v-if="activeFilterCount"
+            type="button"
+            class="clear-filter-btn"
+            @click="clearFilters"
+          >
+            Clear filters
+          </button>
         </div>
 
         <!-- Loading State -->
@@ -311,45 +377,156 @@ const handleUseGpsHero = async () => {
   min-height: 80vh;
   background-color: #ffffff;
 }
-.discovery-filters { display:flex; flex-wrap:wrap; gap:.65rem; margin:0 0 1rem; }
-.discovery-filters label { display:flex; align-items:center; gap:.35rem; padding:.45rem .65rem; border:1px solid #ddd; border-radius:8px; background:#fff; font-size:.86rem; font-weight:600; }
-.discovery-filters select { border:0; background:transparent; min-width:0; }
-.open-now-filter { cursor:pointer; }
+.discovery-filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin: 0 0 1.25rem;
+  padding: 0.65rem;
+  border: 1px solid #e7e7e7;
+  border-radius: 14px;
+  background: #f8f8f8;
+}
+.filter-select,
+.open-now-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 52px;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #dedede;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #1f1f1f;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.filter-select i {
+  color: #06c167;
+  font-size: 1.05rem;
+}
+.filter-select span {
+  white-space: nowrap;
+}
+.filter-select select {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #333333;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+.open-now-filter {
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+.open-now-filter:hover {
+  border-color: #06c167;
+  background-color: #f2fcf6;
+}
+.open-now-filter input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #06c167;
+}
 
 /* ===== HERO ===== */
 .marketplace-hero {
   position: relative;
-  background-color: #ffffff;
-  padding: 4rem 0 3rem;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 4% 18%, rgba(6, 193, 103, 0.13) 0, rgba(6, 193, 103, 0) 25rem),
+    linear-gradient(180deg, #ffffff 0%, #f8fcf9 100%);
+  padding: clamp(3rem, 6vw, 5.25rem) 0 clamp(3.5rem, 6vw, 5rem);
 }
 
 .hero-container {
   max-width: 1240px;
   display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
-  gap: 3rem;
+  grid-template-columns: minmax(0, 1fr) minmax(380px, 0.88fr);
+  gap: clamp(2rem, 6vw, 5rem);
   align-items: center;
 }
 
 .hero-title {
-  margin: 0 0 2rem;
+  max-width: 11ch;
+  margin: 0 0 1rem;
   font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-  font-size: clamp(2.5rem, 5vw, 3.75rem);
+  font-size: clamp(2.8rem, 5.4vw, 4.5rem);
   font-weight: 800;
   line-height: 1.05;
   color: #000000;
   letter-spacing: -0.03em;
 }
 
+.hero-title span {
+  color: var(--brand-primary, #06c167);
+}
+
+.hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 1rem;
+  color: #277047;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.hero-eyebrow i {
+  color: var(--brand-primary, #06c167);
+  font-size: 1rem;
+}
+
+.hero-support {
+  max-width: 36rem;
+  margin: 0 0 1.5rem;
+  color: #5f675f;
+  font-size: 1.04rem;
+  line-height: 1.6;
+}
+
 /* ===== ADDRESS BAR ===== */
 .hero-address-bar {
-  background-color: #ffffff;
-  max-width: 540px;
+  max-width: 590px;
+  padding: 1rem;
+  border: 1px solid #dfe9e1;
+  border-radius: 16px;
+  background-color: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 16px 35px rgba(35, 65, 44, 0.1);
+}
+
+.address-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  color: #333333;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.address-card-secure {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: #588066;
+  font-size: 0.72rem;
+  font-weight: 700;
 }
 
 .fulfilment-toggle {
-  display: inline-flex;
-  background-color: #f5f5f5;
+  display: flex;
+  width: fit-content;
+  background-color: #f1f4f1;
   padding: 0.25rem;
   border-radius: 999px;
   margin-bottom: 1rem;
@@ -371,9 +548,9 @@ const handleUseGpsHero = async () => {
 }
 
 .toggle-btn.active {
-  background-color: #ffffff;
-  color: #000000;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  background-color: #1f1f1f;
+  color: #ffffff;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.12);
 }
 
 .address-input-row {
@@ -387,10 +564,11 @@ const handleUseGpsHero = async () => {
   display: flex;
   align-items: center;
   gap: 0.6rem;
+  min-height: 52px;
   padding: 0.85rem 1rem;
-  background-color: #f5f5f5;
-  border: 1.5px solid #e0e0e0;
-  border-radius: 8px;
+  background-color: #f7f8f7;
+  border: 1.5px solid #d9ded9;
+  border-radius: 10px;
   cursor: pointer;
   text-align: left;
   transition: border-color 0.2s, background-color 0.2s;
@@ -419,11 +597,11 @@ const handleUseGpsHero = async () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 8px;
-  background-color: #f5f5f5;
-  border: 1.5px solid #e0e0e0;
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  background-color: #f7f8f7;
+  border: 1.5px solid #d9ded9;
   color: #545454;
   font-size: 1.125rem;
   cursor: pointer;
@@ -440,7 +618,8 @@ const handleUseGpsHero = async () => {
 }
 
 .btn-find-food {
-  padding: 0.85rem 1.5rem;
+  min-height: 52px;
+  padding: 0.85rem 1.35rem;
   background-color: #06C167;
   color: #ffffff;
   border: none;
@@ -456,13 +635,35 @@ const handleUseGpsHero = async () => {
   background-color: #05a85a;
 }
 
+.hero-benefits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin-top: 1.1rem;
+  color: #526257;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.hero-benefits span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.hero-benefits i {
+  color: var(--brand-primary, #06c167);
+  font-size: 1rem;
+}
+
 /* ===== HERO FOOD IMAGE ===== */
 .hero-food {
   position: relative;
   display: block;
-  aspect-ratio: 1;
+  aspect-ratio: 0.94;
   overflow: hidden;
-  border-radius: 16px;
+  border-radius: 24px;
+  box-shadow: 0 24px 48px rgba(39, 30, 20, 0.18);
 }
 .hero-food img {
   width: 100%;
@@ -470,8 +671,36 @@ const handleUseGpsHero = async () => {
   object-fit: cover;
 }
 
+.hero-food::after {
+  position: absolute;
+  inset: 45% 0 0;
+  content: '';
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.56));
+  pointer-events: none;
+}
+
+.hero-food-caption {
+  position: absolute;
+  z-index: 1;
+  right: 1rem;
+  bottom: 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #28231e;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.hero-food-caption i {
+  color: var(--brand-primary, #06c167);
+}
+
 .hero-editorial {
-  aspect-ratio: 1;
+  aspect-ratio: 0.94;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -523,13 +752,17 @@ const handleUseGpsHero = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
+  border: 1px solid transparent;
+  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif;
   font-size: 1.5rem;
   color: #545454;
   transition: all 0.2s;
 }
 
 .cuisine-item:hover .cuisine-icon-circle {
-  background-color: #e8e8e8;
+  transform: translateY(-2px);
+  border-color: #bceecf;
+  background-color: #effaf4;
 }
 
 .cuisine-item.active .cuisine-icon-circle {
@@ -580,11 +813,12 @@ const handleUseGpsHero = async () => {
   align-items: center;
   position: relative;
   width: 100%;
-  max-width: 320px;
-  background-color: #f5f5f5;
-  border: 1.5px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 0.4rem 0.75rem;
+  max-width: 390px;
+  min-height: 52px;
+  background-color: #f8f8f8;
+  border: 1.5px solid #dedede;
+  border-radius: 10px;
+  padding: 0.4rem 0.85rem;
 }
 
 .search-input-box:focus-within {
@@ -614,6 +848,19 @@ const handleUseGpsHero = async () => {
   color: #999;
   cursor: pointer;
   padding: 0;
+}
+.clear-filter-btn {
+  border: 0;
+  padding: 0.5rem 0;
+  background: transparent;
+  color: #4d4d4d;
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.clear-filter-btn:hover {
+  color: #000000;
 }
 
 .restaurants-grid {
@@ -679,7 +926,20 @@ const handleUseGpsHero = async () => {
   margin-top: 1.5rem;
 }
 
-.location-notice { margin: 0.75rem 0; color: #666; line-height: 1.6; font-size: 0.9375rem; }
+.location-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #d9eee2;
+  border-radius: 10px;
+  background: #f4fbf7;
+  color: #366149;
+  line-height: 1.5;
+  font-size: 0.9375rem;
+}
+.location-notice i { color: #06c167; font-size: 1.1rem; }
 .results-pagination { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 2rem; }
 .radius-control { display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem; }
 .radius-control select { padding: .6rem; border: 1px solid #e0e0e0; border-radius: 8px; background: white; }
@@ -698,6 +958,9 @@ const handleUseGpsHero = async () => {
   .btn-find-food {
     width: 100%;
   }
+  .hero-address-bar {
+    max-width: none;
+  }
   .search-input-box {
     max-width: 100%;
   }
@@ -709,6 +972,9 @@ const handleUseGpsHero = async () => {
     height: 52px;
     font-size: 1.25rem;
   }
+  .discovery-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 @media (max-width: 760px) {
   .hero-container {
@@ -717,10 +983,56 @@ const handleUseGpsHero = async () => {
   }
   .hero-food {
     aspect-ratio: 16/9;
-    border-radius: 12px;
+    border-radius: 16px;
   }
   .hero-editorial {
     display: none;
+  }
+  .hero-title {
+    max-width: 12ch;
+  }
+}
+@media (max-width: 480px) {
+  .marketplace-hero {
+    padding-top: 2.25rem;
+  }
+  .hero-title {
+    font-size: 2.55rem;
+  }
+  .hero-support {
+    font-size: 0.95rem;
+  }
+  .address-card-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .fulfilment-toggle {
+    width: 100%;
+  }
+  .toggle-btn {
+    flex: 1;
+    justify-content: center;
+  }
+  .hero-benefits {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.45rem;
+  }
+}
+@media (max-width: 480px) {
+  .discovery-filters {
+    grid-template-columns: 1fr;
+  }
+  .filter-select,
+  .open-now-filter {
+    min-height: 48px;
+  }
+  .results-toolbar {
+    align-items: stretch;
+  }
+  .search-input-box {
+    max-width: none;
   }
 }
 </style>
