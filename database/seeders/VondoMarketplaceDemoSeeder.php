@@ -159,12 +159,16 @@ class VondoMarketplaceDemoSeeder extends Seeder
                     $email = "demo-{$restaurant->slug}-{$number}@vondo.local";
                     $customer = Customer::query()->where('restaurant_id', $restaurant->getKey())->where('email', $email)->first();
                     if (!$customer) {
-                        $customer = (new Customer)->register([
+                        // Customer::register() always creates a new model and cannot carry
+                        // tenant ownership into the initial INSERT. Save this scoped model
+                        // directly so the database tenant FK is valid from the first write.
+                        $customer = new Customer;
+                        $customer->forceFill([
+                            'restaurant_id' => $restaurant->getKey(),
                             'first_name' => 'Demo', 'last_name' => "Customer {$number}", 'email' => $email,
                             'telephone' => '+41 44 555 01 '.str_pad((string)$number, 2, '0', STR_PAD_LEFT), 'password' => 'DemoCustomer!2026',
                             'customer_group_id' => $groupId, 'status' => true, 'is_activated' => true, 'activated_at' => now(),
-                        ]);
-                        $customer->forceFill(['restaurant_id' => $restaurant->getKey()])->save();
+                        ])->save();
                     }
                     foreach (['Demo Street '.$number, 'Market Lane '.$number] as $address) {
                         $customer->addresses()->firstOrCreate(['address_1' => $address, 'restaurant_id' => $restaurant->getKey()], [
