@@ -237,13 +237,13 @@ class VondoMarketplaceDemoSeeder extends Seeder
     /** Attach deterministic size and extra choices through the normal cart models. */
     private function attachDemoOptions(Menu $menu, int $restaurantId, int $dish): void
     {
-        $size = MenuOption::query()->updateOrCreate(['restaurant_id' => $restaurantId, 'option_name' => 'Choose a size'], ['display_type' => 'radio', 'priority' => 1]);
-        $extras = MenuOption::query()->updateOrCreate(['restaurant_id' => $restaurantId, 'option_name' => 'Extras'], ['display_type' => 'checkbox', 'priority' => 2]);
-        $sizeValues = collect([['Regular', 0.0], ['Large', 3.5]])->map(fn(array $value) => MenuOptionValue::query()->updateOrCreate(
-            ['option_id' => $size->getKey(), 'name' => $value[0]], ['price' => $value[1], 'priority' => $value[0] === 'Regular' ? 1 : 2],
+        $size = $this->option($restaurantId, 'Choose a size', 'radio', 1);
+        $extras = $this->option($restaurantId, 'Extras', 'checkbox', 2);
+        $sizeValues = collect([['Regular', 0.0], ['Large', 3.5]])->map(fn(array $value) => $this->optionValue(
+            $size, $restaurantId, $value[0], $value[1], $value[0] === 'Regular' ? 1 : 2,
         ));
-        $extraValues = collect([['Extra herbs', 0.8], ['Swiss cheese', 1.8], ['Chili oil', 0.5]])->map(fn(array $value) => MenuOptionValue::query()->updateOrCreate(
-            ['option_id' => $extras->getKey(), 'name' => $value[0]], ['price' => $value[1], 'priority' => array_search($value[0], ['Extra herbs', 'Swiss cheese', 'Chili oil']) + 1],
+        $extraValues = collect([['Extra herbs', 0.8], ['Swiss cheese', 1.8], ['Chili oil', 0.5]])->map(fn(array $value) => $this->optionValue(
+            $extras, $restaurantId, $value[0], $value[1], array_search($value[0], ['Extra herbs', 'Swiss cheese', 'Chili oil']) + 1,
         ));
         if ($dish <= 18) $this->attachOption($menu, $size, $sizeValues, true, 1, 1);
         if ($dish % 2 === 0) $this->attachOption($menu, $extras, $extraValues, false, 0, 3);
@@ -251,14 +251,28 @@ class VondoMarketplaceDemoSeeder extends Seeder
 
     private function attachOption(Menu $menu, MenuOption $option, $values, bool $required, int $min, int $max): void
     {
-        $itemOption = MenuItemOption::query()->updateOrCreate(['menu_id' => $menu->getKey(), 'option_id' => $option->getKey()], [
-            'is_required' => $required, 'priority' => $option->priority, 'min_selected' => $min, 'max_selected' => $max, 'free_quantity' => 0,
-        ]);
+        $itemOption = MenuItemOption::query()->where('restaurant_id', $menu->restaurant_id)->where('menu_id', $menu->getKey())->where('option_id', $option->getKey())->first() ?? new MenuItemOption;
+        $itemOption->forceFill(['restaurant_id' => $menu->restaurant_id, 'menu_id' => $menu->getKey(), 'option_id' => $option->getKey(),
+            'is_required' => $required, 'priority' => $option->priority, 'min_selected' => $min, 'max_selected' => $max, 'free_quantity' => 0])->save();
         foreach ($values as $priority => $value) {
-            MenuItemOptionValue::query()->updateOrCreate(['menu_option_id' => $itemOption->getKey(), 'option_value_id' => $value->getKey()], [
-                'override_price' => $value->price, 'priority' => $priority + 1, 'is_default' => $required && $priority === 0, 'free_quantity' => 0,
-            ]);
+            $itemValue = MenuItemOptionValue::query()->where('restaurant_id', $menu->restaurant_id)->where('menu_option_id', $itemOption->getKey())->where('option_value_id', $value->getKey())->first() ?? new MenuItemOptionValue;
+            $itemValue->forceFill(['restaurant_id' => $menu->restaurant_id, 'menu_option_id' => $itemOption->getKey(), 'option_value_id' => $value->getKey(),
+                'override_price' => $value->price, 'priority' => $priority + 1, 'is_default' => $required && $priority === 0, 'free_quantity' => 0])->save();
         }
+    }
+
+    private function option(int $restaurantId, string $name, string $displayType, int $priority): MenuOption
+    {
+        $option = MenuOption::query()->where('restaurant_id', $restaurantId)->where('option_name', $name)->first() ?? new MenuOption;
+        $option->forceFill(['restaurant_id' => $restaurantId, 'option_name' => $name, 'display_type' => $displayType, 'priority' => $priority])->save();
+        return $option;
+    }
+
+    private function optionValue(MenuOption $option, int $restaurantId, string $name, float $price, int $priority): MenuOptionValue
+    {
+        $value = MenuOptionValue::query()->where('restaurant_id', $restaurantId)->where('option_id', $option->getKey())->where('name', $name)->first() ?? new MenuOptionValue;
+        $value->forceFill(['restaurant_id' => $restaurantId, 'option_id' => $option->getKey(), 'name' => $name, 'price' => $price, 'priority' => $priority])->save();
+        return $value;
     }
 
     private function foodPhoto(int $index): string
