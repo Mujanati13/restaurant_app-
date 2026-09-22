@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import type { DiscoveryRestaurant } from '~/composables/useDiscovery'
 
 const props = defineProps<{
@@ -119,22 +119,22 @@ const money = (value: number) => new Intl.NumberFormat('de-CH', { style: 'curren
   display: flex;
   flex-direction: column;
   background-color: #ffffff;
-  border-radius: 18px;
+  border-radius: 12px;
   overflow: hidden;
-  border: 1px solid #efe8df;
+  border: 1px solid #e8e8e8;
   text-decoration: none;
   color: inherit;
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s;
 }
 
 .restaurant-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 28px rgba(41, 35, 31, 0.08);
-  border-color: #e5dacd;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  border-color: #d0d0d0;
 }
 
 .restaurant-card:focus-visible {
-  outline: 2px solid #c95028;
+  outline: 2px solid #06C167;
   outline-offset: 3px;
 }
 
@@ -142,7 +142,7 @@ const money = (value: number) => new Intl.NumberFormat('de-CH', { style: 'curren
   position: relative;
   aspect-ratio: 16 / 9;
   width: 100%;
-  background-color: #f7f3ed;
+  background-color: #f5f5f5;
   overflow: hidden;
 }
 
@@ -164,22 +164,22 @@ const money = (value: number) => new Intl.NumberFormat('de-CH', { style: 'curren
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #f7f3ed 0%, #ece5da 100%);
-  color: #8c8278;
+  background: linear-gradient(135deg, #f5f5f5 0%, #ebebeb 100%);
+  color: #999;
   gap: 0.5rem;
   padding: 1rem;
 }
 
 .placeholder-glyph {
   font-size: 2.25rem;
-  color: #c95028;
+  color: #06C167;
   opacity: 0.8;
 }
 
 .placeholder-name {
   font-weight: 600;
   font-size: 0.875rem;
-  color: #595048;
+  color: #666;
 }
 
 .card-status-badge {
@@ -190,27 +190,27 @@ const money = (value: number) => new Intl.NumberFormat('de-CH', { style: 'curren
   align-items: center;
   gap: 0.4rem;
   padding: 0.35rem 0.65rem;
-  background-color: rgba(255, 255, 255, 0.94);
+  background-color: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(6px);
   border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 700;
-  color: #29231f;
+  color: #000000;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .card-status-badge.closed {
-  color: #8c8278;
+  color: #999;
 }
 
 .status-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background-color: #9e958c;
+  background-color: #ccc;
 }
 .status-dot.active {
-  background-color: #22c55e;
+  background-color: #06C167;
 }
 
 .card-distance-badge {
@@ -221,7 +221,7 @@ const money = (value: number) => new Intl.NumberFormat('de-CH', { style: 'curren
   align-items: center;
   gap: 0.3rem;
   padding: 0.3rem 0.6rem;
-  background-color: rgba(28, 24, 21, 0.8);
+  background-color: rgba(0, 0, 0, 0.75);
   backdrop-filter: blur(4px);
   color: #ffffff;
   border-radius: 999px;
@@ -230,7 +230,7 @@ const money = (value: number) => new Intl.NumberFormat('de-CH', { style: 'curren
 }
 
 .card-body {
-  padding: 1.1rem 1.25rem 1.25rem;
+  padding: 0.9rem 1rem 1rem;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -251,16 +251,16 @@ const money = (value: number) => new Intl.NumberFormat('de-CH', { style: 'curren
 
 .restaurant-name {
   margin: 0 0 0.25rem;
-  font-size: 1.125rem;
+  font-size: 1rem;
   font-weight: 700;
-  color: #29231f;
+  color: #000000;
   line-height: 1.3;
 }
 
 .restaurant-tagline {
   margin: 0;
   font-size: 0.84rem;
-  color: #6b635b;
+  color: #666;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -271,7 +271,7 @@ const money = (value: number) => new Intl.NumberFormat('de-CH', { style: 'curren
   height: 36px;
   border-radius: 8px;
   object-fit: cover;
-  border: 1px solid #efe8df;
+  border: 1px solid #e8e8e8;
   background-color: #ffffff;
   flex-shrink: 0;
 }
@@ -285,9 +285,9 @@ const money = (value: number) => new Intl.NumberFormat('de-CH', { style: 'curren
 
 .cuisine-tag {
   padding: 0.2rem 0.5rem;
-  background-color: #fbf8f3;
-  color: #665c52;
-  border-radius: 6px;
+  background-color: #f5f5f5;
+  color: #666;
+  border-radius: 4px;
   font-size: 0.75rem;
   font-weight: 500;
 }
@@ -298,9 +298,9 @@ const money = (value: number) => new Intl.NumberFormat('de-CH', { style: 'curren
   gap: 0.5rem;
   margin-top: auto;
   padding-top: 0.75rem;
-  border-top: 1px solid #f7f3ee;
+  border-top: 1px solid #f0f0f0;
   font-size: 0.8125rem;
-  color: #665c52;
+  color: #666;
 }
 
 .meta-item {
@@ -310,6 +310,6 @@ const money = (value: number) => new Intl.NumberFormat('de-CH', { style: 'curren
 }
 
 .meta-dot {
-  color: #d1c8be;
+  color: #d0d0d0;
 }
 </style>

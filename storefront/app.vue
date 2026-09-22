@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { useIsMarketplace, useTenant } from '~/composables/useTenant'
 
 const isMarketplace = useIsMarketplace()
@@ -10,13 +10,13 @@ const theme = computed(() => tenant.value?.brand.theme || {})
 const rootStyle = computed(() => {
   if (isMarketplace.value) {
     return {
-      '--brand-primary': '#c95028',
-      '--brand-secondary': '#29231f',
-      '--brand-accent': '#e06336',
-      '--bg-primary': '#fbf8f3',
+      '--brand-primary': '#06C167',
+      '--brand-secondary': '#000000',
+      '--brand-accent': '#06C167',
+      '--bg-primary': '#ffffff',
       '--bg-card': '#ffffff',
-      '--text-primary': '#29231f',
-      '--radius-md': '16px',
+      '--text-primary': '#000000',
+      '--radius-md': '12px',
     }
   }
   return {
@@ -72,7 +72,7 @@ useHead({
     { rel: 'manifest', href: '/manifest.webmanifest' },
   ],
   meta: [
-    { name: 'theme-color', content: () => String(isMarketplace.value ? '#c95028' : (theme.value.primary || '#c95028')) },
+    { name: 'theme-color', content: () => String(isMarketplace.value ? '#06C167' : (theme.value.primary || '#c95028')) },
   ],
 })
 </script>

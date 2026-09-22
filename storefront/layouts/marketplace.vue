@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { useDiscovery } from '~/composables/useDiscovery'
 import AddressModal from '~/components/discovery/AddressModal.vue'
 
@@ -112,7 +112,7 @@ const mobileNavOpen = ref(false)
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: #fbf8f3;
+  background-color: #ffffff;
   color: #29231f;
   font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
 }
@@ -121,7 +121,7 @@ const mobileNavOpen = ref(false)
   position: absolute;
   top: -40px;
   left: 0;
-  background: #c95028;
+  background: #06C167;
   color: #ffffff;
   padding: 8px;
   z-index: 10000;
@@ -137,9 +137,9 @@ const mobileNavOpen = ref(false)
   position: sticky;
   top: 0;
   z-index: 50;
-  background-color: rgba(255, 255, 255, 0.95);
+  background-color: rgba(255, 255, 255, 0.98);
   backdrop-filter: blur(8px);
-  border-bottom: 1px solid #efe8df;
+  border-bottom: 1px solid #f0f0f0;
 }
 
 .header-inner {
@@ -162,7 +162,7 @@ const mobileNavOpen = ref(false)
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background-color: #c95028;
+  background-color: #000000;
   color: #ffffff;
   display: flex;
   align-items: center;
@@ -183,12 +183,12 @@ const mobileNavOpen = ref(false)
 .brand-text strong {
   font-size: 1.2rem;
   font-weight: 800;
-  color: #1f1a17;
+  color: #000000;
   letter-spacing: -0.02em;
 }
 .brand-text small {
   font-size: 0.72rem;
-  color: #8c8278;
+  color: #545454;
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -198,8 +198,8 @@ const mobileNavOpen = ref(false)
   align-items: center;
   gap: 0.5rem;
   padding: 0.45rem 0.9rem;
-  background-color: #f7f3ed;
-  border: 1px solid #e5dacd;
+  background-color: #f5f5f5;
+  border: 1px solid #e0e0e0;
   border-radius: 999px;
   font-size: 0.875rem;
   color: #29231f;
@@ -209,11 +209,11 @@ const mobileNavOpen = ref(false)
 }
 .header-address-pill:hover {
   background-color: #ffffff;
-  border-color: #c95028;
+  border-color: #06C167;
 }
 
 .pill-pin {
-  color: #c95028;
+  color: #06C167;
   font-size: 1rem;
   flex-shrink: 0;
 }
@@ -240,7 +240,7 @@ const mobileNavOpen = ref(false)
   align-items: center;
   gap: 0.4rem;
   text-decoration: none;
-  color: #595048;
+  color: #000000;
   font-weight: 600;
   font-size: 0.9rem;
   padding: 0.4rem 0.6rem;
@@ -248,7 +248,7 @@ const mobileNavOpen = ref(false)
 }
 .header-link:hover {
   color: #29231f;
-  background-color: #f7f3ed;
+  background-color: #f5f5f5;
 }
 
 .header-cart-btn {
@@ -256,8 +256,8 @@ const mobileNavOpen = ref(false)
   width: 40px;
   height: 40px;
   border-radius: 10px;
-  background-color: #fdf5f0;
-  color: #c95028;
+  background-color: #eafaf1;
+  color: #06C167;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -265,14 +265,14 @@ const mobileNavOpen = ref(false)
   text-decoration: none;
 }
 .header-cart-btn:hover {
-  background-color: #fcece3;
+  background-color: #d4f5e2;
 }
 
 .cart-badge {
   position: absolute;
   top: -4px;
   right: -4px;
-  background-color: #c95028;
+  background-color: #06C167;
   color: #ffffff;
   font-size: 0.75rem;
   font-weight: 700;
@@ -288,7 +288,7 @@ const mobileNavOpen = ref(false)
 /* Footer */
 .marketplace-footer {
   margin-top: auto;
-  background-color: #1f1a17;
+  background-color: #000000;
   color: #ede4d8;
   padding: 4rem 0 2rem;
 }
@@ -312,7 +312,7 @@ const mobileNavOpen = ref(false)
 }
 
 .footer-about {
-  color: #b5aba0;
+  color: #b0b0b0;
   line-height: 1.6;
   font-size: 0.9375rem;
   margin-bottom: 1.5rem;
@@ -327,7 +327,7 @@ const mobileNavOpen = ref(false)
   background-color: rgba(255, 255, 255, 0.08);
   border-radius: 8px;
   font-size: 0.8125rem;
-  color: #ded6cc;
+  color: #d0d0d0;
 }
 
 .footer-links-col h4 {
@@ -347,7 +347,7 @@ const mobileNavOpen = ref(false)
 }
 
 .footer-links-col a, .city-link {
-  color: #b5aba0;
+  color: #b0b0b0;
   text-decoration: none;
   font-size: 0.9rem;
   background: none;
@@ -371,7 +371,7 @@ const mobileNavOpen = ref(false)
   padding-top: 2rem;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   font-size: 0.84rem;
-  color: #8c8278;
+  color: #707070;
 }
 
 .bottom-links {

@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { useDiscovery, type AddressMatch } from '~/composables/useDiscovery'
 
 const {
@@ -222,8 +222,8 @@ const handleKeydown = (e: KeyboardEvent) => {
   width: 100%;
   max-width: 520px;
   background-color: #ffffff;
-  border-radius: 20px;
-  box-shadow: 0 20px 50px rgba(41, 35, 31, 0.25);
+  border-radius: 16px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.2);
   overflow: hidden;
   animation: modalSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -244,7 +244,7 @@ const handleKeydown = (e: KeyboardEvent) => {
   align-items: center;
   justify-content: space-between;
   padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid #f0e9e1;
+  border-bottom: 1px solid #f0f0f0;
 }
 
 .modal-title {
@@ -254,18 +254,18 @@ const handleKeydown = (e: KeyboardEvent) => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #29231f;
+  color: #000000;
 }
 
 .text-terracotta {
-  color: #c95028;
+  color: #06C167;
 }
 
 .modal-close-btn {
   background: none;
   border: none;
   font-size: 1.5rem;
-  color: #6b635b;
+  color: #666;
   cursor: pointer;
   padding: 0.25rem;
   border-radius: 8px;
@@ -274,8 +274,8 @@ const handleKeydown = (e: KeyboardEvent) => {
   justify-content: center;
 }
 .modal-close-btn:hover {
-  background-color: #f7f3ee;
-  color: #29231f;
+  background-color: #f5f5f5;
+  color: #000;
 }
 
 .modal-body {
@@ -285,7 +285,7 @@ const handleKeydown = (e: KeyboardEvent) => {
 .modal-intro {
   margin: 0 0 1.25rem;
   font-size: 0.9375rem;
-  color: #5c554e;
+  color: #666;
   line-height: 1.5;
 }
 
@@ -297,22 +297,22 @@ const handleKeydown = (e: KeyboardEvent) => {
   display: flex;
   align-items: center;
   position: relative;
-  background-color: #fbf8f3;
-  border: 1.5px solid #dfd7cc;
+  background-color: #f5f5f5;
+  border: 1.5px solid #e0e0e0;
   border-radius: 12px;
   padding: 0.25rem 0.35rem 0.25rem 0.75rem;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .address-input-wrapper:focus-within {
-  border-color: #c95028;
-  box-shadow: 0 0 0 3px rgba(201, 80, 40, 0.15);
+  border-color: #06C167;
+  box-shadow: 0 0 0 3px rgba(6,193,103,0.15);
   background-color: #ffffff;
 }
 
 .address-input-icon {
   font-size: 1.25rem;
-  color: #8c827a;
+  color: #999;
   margin-right: 0.5rem;
 }
 
@@ -322,7 +322,7 @@ const handleKeydown = (e: KeyboardEvent) => {
   background: transparent;
   padding: 0.6rem 0;
   font-size: 0.95rem;
-  color: #29231f;
+  color: #000000;
   outline: none;
   font-family: inherit;
 }
@@ -331,14 +331,14 @@ const handleKeydown = (e: KeyboardEvent) => {
   padding: 0.6rem 1.25rem;
   font-size: 0.875rem;
   font-weight: 600;
-  border-radius: 9px;
-  background-color: #c95028;
+  border-radius: 8px;
+  background-color: #06C167;
   color: #ffffff;
   border: none;
   cursor: pointer;
 }
 .btn-search:hover:not(:disabled) {
-  background-color: #b5431d;
+  background-color: #05a85a;
 }
 .btn-search:disabled {
   opacity: 0.6;
@@ -354,9 +354,9 @@ const handleKeydown = (e: KeyboardEvent) => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.6rem 1rem;
-  background-color: #fdf5f0;
-  border: 1px solid #f2cfbf;
-  color: #c95028;
+  background-color: #f0faf5;
+  border: 1px solid #c8e6d8;
+  color: #06C167;
   font-weight: 600;
   font-size: 0.9rem;
   border-radius: 10px;
@@ -366,8 +366,8 @@ const handleKeydown = (e: KeyboardEvent) => {
   justify-content: center;
 }
 .btn-gps:hover:not(:disabled) {
-  background-color: #fcece3;
-  border-color: #e5b199;
+  background-color: #e0f5ec;
+  border-color: #a0d4b8;
 }
 .btn-gps:disabled {
   opacity: 0.6;
@@ -422,7 +422,7 @@ const handleKeydown = (e: KeyboardEvent) => {
   font-size: 0.8125rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #8c827a;
+  color: #999;
   margin: 0 0 0.5rem;
 }
 
@@ -432,7 +432,7 @@ const handleKeydown = (e: KeyboardEvent) => {
   margin: 0;
   max-height: 240px;
   overflow-y: auto;
-  border: 1px solid #f0e9e1;
+  border: 1px solid #e8e8e8;
   border-radius: 12px;
 }
 
@@ -441,7 +441,7 @@ const handleKeydown = (e: KeyboardEvent) => {
   align-items: center;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid #f7f3ee;
+  border-bottom: 1px solid #f5f5f5;
   cursor: pointer;
   transition: background-color 0.15s;
 }
@@ -449,7 +449,7 @@ const handleKeydown = (e: KeyboardEvent) => {
   border-bottom: none;
 }
 .match-item:hover, .match-item:focus {
-  background-color: #fdfbf7;
+  background-color: #f9f9f9;
   outline: none;
 }
 
@@ -457,8 +457,8 @@ const handleKeydown = (e: KeyboardEvent) => {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background-color: #f7f3ee;
-  color: #c95028;
+  background-color: #f0faf5;
+  color: #06C167;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -473,14 +473,14 @@ const handleKeydown = (e: KeyboardEvent) => {
 }
 .match-text strong {
   font-size: 0.9375rem;
-  color: #29231f;
+  color: #000000;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .match-sub {
   font-size: 0.8125rem;
-  color: #787067;
+  color: #999;
 }
 
 .match-chevron {
