@@ -17,8 +17,8 @@ use Igniter\Cart\Models\MenuItemOption;
 use Igniter\Cart\Models\MenuItemOptionValue;
 use Igniter\Cart\Models\MenuOption;
 use Igniter\Cart\Models\MenuOptionValue;
-use Igniter\Cart\CartItem;
 use Igniter\Cart\Models\Order;
+use Igniter\Cart\Models\OrderMenu;
 use Igniter\Local\Models\Location;
 use Igniter\Reservation\Models\Reservation;
 use Igniter\User\Models\Customer;
@@ -197,10 +197,11 @@ class VondoMarketplaceDemoSeeder extends Seeder
                         'cancelled_at' => $number % 13 === 0 ? now()->subDays(2) : null,
                         'cancel_reason' => $number % 13 === 0 ? 'Demo customer cancellation' : null,
                     ])->save();
-                    $cartItem = new CartItem($menu->getKey(), $menu->menu_name, (float)$menu->menu_price, [], '');
-                    $cartItem->setQuantity(1);
-                    $order->addOrderMenus([$cartItem]);
-                    \Illuminate\Support\Facades\DB::table('order_menus')->where('order_id', $order->getKey())->update(['restaurant_id' => $restaurant->getKey()]);
+                    OrderMenu::query()->create([
+                        'restaurant_id' => $restaurant->getKey(), 'order_id' => $order->getKey(), 'menu_id' => $menu->getKey(),
+                        'name' => $menu->menu_name, 'quantity' => 1, 'price' => (float)$menu->menu_price,
+                        'subtotal' => (float)$menu->menu_price, 'comment' => '', 'option_values' => [],
+                    ]);
                 }
                 if ($index < 18) {
                     foreach (range(1, 5) as $number) {
