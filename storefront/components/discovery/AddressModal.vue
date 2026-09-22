@@ -95,10 +95,10 @@ const handleKeydown = (e: KeyboardEvent) => {
     >
       <div class="address-modal-card">
         <div class="modal-header">
-          <h2 id="address-modal-title" class="modal-title">
-            <i class="ri-map-pin-2-fill text-terracotta" />
-            <span>Choose delivery address</span>
-          </h2>
+          <div>
+            <p class="modal-eyebrow">Deliveriano</p>
+            <h2 id="address-modal-title" class="modal-title">Where should we deliver?</h2>
+          </div>
           <button
             class="modal-close-btn"
             type="button"
@@ -111,7 +111,7 @@ const handleKeydown = (e: KeyboardEvent) => {
 
         <div class="modal-body">
           <p class="modal-intro">
-            Enter your street address or postal town in Switzerland to see nearby restaurants and delivery fees.
+            Enter an address to see the restaurants, delivery times, and fees available to you.
           </p>
 
           <!-- Address Form -->
@@ -134,12 +134,14 @@ const handleKeydown = (e: KeyboardEvent) => {
                 :disabled="searching || !inputQuery.trim()"
               >
                 <span v-if="searching" class="spinner-sm" />
-                <span v-else>Find</span>
+                <span v-else>Search</span>
               </button>
             </div>
           </form>
 
           <!-- Use GPS Location Button -->
+          <div class="location-divider"><span>or</span></div>
+
           <div class="gps-action-row">
             <button
               type="button"
@@ -149,7 +151,7 @@ const handleKeydown = (e: KeyboardEvent) => {
             >
               <i v-if="gpsStatus === 'requesting'" class="ri-loader-4-line ri-spin" />
               <i v-else class="ri-crosshair-2-line" />
-              <span>Use my current location</span>
+              <span>Use current location</span>
             </button>
           </div>
 
@@ -173,7 +175,7 @@ const handleKeydown = (e: KeyboardEvent) => {
           </div>
 
           <div v-else-if="searchResults.length > 0" class="matches-list-wrap">
-            <h3 class="matches-heading">Select your address:</h3>
+            <h3 class="matches-heading">Suggested addresses</h3>
             <ul class="matches-list">
               <li
                 v-for="(match, idx) in searchResults"
@@ -486,5 +488,46 @@ const handleKeydown = (e: KeyboardEvent) => {
 .match-chevron {
   color: #b5ada4;
   font-size: 1.25rem;
+}
+
+/* Marketplace address sheet: intentionally neutral so restaurant branding does not compete with discovery. */
+.address-modal-backdrop { background: rgba(0, 0, 0, .54); backdrop-filter: blur(8px); padding: 1.25rem; }
+.address-modal-card { max-width: 560px; border-radius: 24px; box-shadow: 0 28px 80px rgba(0,0,0,.28); }
+.modal-header { padding: 1.5rem 1.5rem 1.25rem; align-items: flex-start; border: 0; }
+.modal-eyebrow { margin: 0 0 .3rem; color: #06c167; font-size: .72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.modal-title { font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif; font-size: clamp(1.45rem, 4vw, 1.8rem); font-weight: 800; letter-spacing: -.04em; line-height: 1.1; }
+.modal-close-btn { width: 38px; height: 38px; border-radius: 50%; background: #f3f3f3; font-size: 1.25rem; }
+.modal-close-btn:hover { background: #e7e7e7; }
+.modal-body { padding: 0 1.5rem 1.5rem; }
+.modal-intro { max-width: 430px; margin-bottom: 1.4rem; color: #5f5f5f; font-size: .95rem; }
+.address-search-form { margin: 0; }
+.address-input-wrapper { min-height: 64px; padding: .35rem .4rem .35rem 1rem; background: #f3f3f3; border: 2px solid transparent; border-radius: 14px; }
+.address-input-wrapper:focus-within { border-color: #000; box-shadow: 0 0 0 3px rgba(0,0,0,.1); background: #fff; }
+.address-input-icon { color: #161616; margin-right: .7rem; }
+.address-search-input { min-width: 0; font-size: .98rem; }
+.address-search-input::placeholder { color: #777; }
+.btn-search { min-height: 48px; padding: .6rem 1rem; border-radius: 10px; background: #000; font-weight: 750; }
+.btn-search:hover:not(:disabled) { background: #262626; }
+.location-divider { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: .75rem; margin: 1.2rem 0; color: #777; font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.location-divider::before,.location-divider::after { content: ''; height: 1px; background: #e7e7e7; }
+.gps-action-row { margin: 0; }
+.btn-gps { min-height: 54px; border: 1px solid #d8d8d8; border-radius: 13px; background: #fff; color: #151515; font-weight: 700; }
+.btn-gps i { color: #06c167; font-size: 1.15rem; }
+.btn-gps:hover:not(:disabled) { background: #f4fbf7; border-color: #06c167; }
+.matches-list-wrap { margin-top: 1.5rem; }
+.matches-heading { color: #707070; font-size: .72rem; font-weight: 800; letter-spacing: .08em; }
+.matches-list { border: 0; border-radius: 0; max-height: 272px; }
+.match-item { padding: .9rem .2rem; border-bottom-color: #ececec; }
+.match-item:hover,.match-item:focus { background: #f7f7f7; border-radius: 10px; padding-inline: .6rem; }
+.match-icon { width: 38px; height: 38px; background: #e9f9ef; color: #087b42; }
+.match-text strong { color: #151515; font-size: .94rem; }
+
+@media (max-width: 480px) {
+  .address-modal-backdrop { align-items: flex-end; padding: 0; }
+  .address-modal-card { max-width: none; border-radius: 24px 24px 0 0; }
+  .modal-header { padding-top: 1.35rem; }
+  .modal-body { padding-bottom: max(1.5rem, env(safe-area-inset-bottom)); }
+  .address-input-wrapper { min-height: 58px; }
+  .btn-search { padding-inline: .85rem; }
 }
 </style>
