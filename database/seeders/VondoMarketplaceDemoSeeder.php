@@ -197,7 +197,9 @@ class VondoMarketplaceDemoSeeder extends Seeder
                         'cancelled_at' => $number % 13 === 0 ? now()->subDays(2) : null,
                         'cancel_reason' => $number % 13 === 0 ? 'Demo customer cancellation' : null,
                     ])->save();
-                    $order->addOrderMenus([new CartItem($menu->getKey(), $menu->menu_name, (float)$menu->menu_price, [], '')]);
+                    $cartItem = new CartItem($menu->getKey(), $menu->menu_name, (float)$menu->menu_price, [], '');
+                    $cartItem->setQuantity(1);
+                    $order->addOrderMenus([$cartItem]);
                     \Illuminate\Support\Facades\DB::table('order_menus')->where('order_id', $order->getKey())->update(['restaurant_id' => $restaurant->getKey()]);
                 }
                 if ($index < 18) {
