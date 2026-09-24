@@ -3,6 +3,7 @@ import { useIsMarketplace, useActiveTenant, tenantHref } from '~/composables/use
 import type { MenuItem, Category } from '~/types/storefront'
 import MarketplaceView from '~/components/discovery/MarketplaceView.vue'
 
+const { t } = useLocale()
 const isMarketplace = useIsMarketplace()
 const tenant = useActiveTenant()
 const brand = computed<any>(() => tenant.value?.brand || {})
@@ -89,7 +90,7 @@ const offersPickup = computed(() => restaurantLocations.value.some(location => l
         <div class="container hero-inner">
           <div class="hero-cover-context">
             <span><i class="ri-map-pin-2-line" /> {{ brand.identity?.tagline || 'Discover a local favourite' }}</span>
-            <span class="hero-cover-context-note"><i class="ri-heart-3-line" /> Order directly from the restaurant</span>
+            <span class="hero-cover-context-note"><i class="ri-heart-3-line" /> {{ t('restaurant.orderDirect') }}</span>
           </div>
           <div class="hero-card-surface">
             <div class="restaurant-identity-header">
@@ -104,7 +105,7 @@ const offersPickup = computed(() => restaurantLocations.value.some(location => l
               </div>
 
               <div class="restaurant-titles">
-                <span class="restaurant-hero-kicker">Order directly from the restaurant</span>
+                <span class="restaurant-hero-kicker">{{ t('restaurant.orderDirect') }}</span>
                 <h1 class="restaurant-display-name">{{ tenant.restaurant.name }}</h1>
                 <p v-if="brand.identity?.tagline" class="restaurant-display-sub">
                   {{ brand.identity.tagline }}
@@ -114,23 +115,23 @@ const offersPickup = computed(() => restaurantLocations.value.some(location => l
                   <span>{{ tenant.restaurant.address }}</span>
                 </div>
                 <div class="restaurant-service-summary">
-                  <span v-if="offersDelivery"><i class="ri-e-bike-2-line" /> Delivery available</span>
-                  <span v-if="offersPickup"><i class="ri-shopping-bag-3-line" /> Pickup available</span>
+                  <span v-if="offersDelivery"><i class="ri-e-bike-2-line" /> {{ t('restaurant.deliveryAvailable') }}</span>
+                  <span v-if="offersPickup"><i class="ri-shopping-bag-3-line" /> {{ t('restaurant.pickupAvailable') }}</span>
                 </div>
               </div>
             </div>
 
             <div class="hero-order-panel">
-              <p class="hero-order-kicker">Ready when you are</p>
+              <p class="hero-order-kicker">{{ t('restaurant.ready') }}</p>
               <div class="hero-service-pills" aria-label="Available services">
-                <span v-if="offersDelivery"><i class="ri-e-bike-2-line" /> Delivery</span>
-                <span v-if="offersPickup"><i class="ri-shopping-bag-3-line" /> Pickup</span>
-                <span><i class="ri-shield-check-line" /> Secure order</span>
+                <span v-if="offersDelivery"><i class="ri-e-bike-2-line" /> {{ t('hero.delivery') }}</span>
+                <span v-if="offersPickup"><i class="ri-shopping-bag-3-line" /> {{ t('hero.pickup') }}</span>
+                <span><i class="ri-shield-check-line" /> {{ t('restaurant.secureOrder') }}</span>
               </div>
               <div class="hero-actions-row">
                 <NuxtLink class="btn primary hero-action-btn" :to="tenantHref('/menu')">
                   <i class="ri-restaurant-line" />
-                  <span>Browse menu</span>
+                  <span>{{ t('restaurant.browseMenu') }}</span>
                 </NuxtLink>
                 <NuxtLink
                   v-if="tenant.capabilities?.reservations"
@@ -138,7 +139,7 @@ const offersPickup = computed(() => restaurantLocations.value.some(location => l
                   :to="tenantHref('/reservations')"
                 >
                   <i class="ri-calendar-line" />
-                  <span>Reserve</span>
+                  <span>{{ t('restaurant.reserve') }}</span>
                 </NuxtLink>
               </div>
             </div>
@@ -151,11 +152,11 @@ const offersPickup = computed(() => restaurantLocations.value.some(location => l
         <div class="container">
           <div class="section-headline">
             <div>
-              <span class="section-kicker">Our Selection</span>
-              <h2>Menu Categories</h2>
+              <span class="section-kicker">{{ t('restaurant.ourSelection') }}</span>
+              <h2>{{ t('restaurant.menuCategories') }}</h2>
             </div>
             <NuxtLink class="section-link-action" :to="tenantHref('/menu')">
-              <span>View full menu</span>
+              <span>{{ t('restaurant.viewFullMenu') }}</span>
               <i class="ri-arrow-right-line" />
             </NuxtLink>
           </div>
@@ -170,7 +171,7 @@ const offersPickup = computed(() => restaurantLocations.value.some(location => l
               @click="selectCategory(null)"
             >
               <i class="ri-apps-2-line" />
-              <span>All Dishes</span>
+              <span>{{ t('restaurant.allDishes') }}</span>
             </button>
             <button
               v-for="category in categories.data"

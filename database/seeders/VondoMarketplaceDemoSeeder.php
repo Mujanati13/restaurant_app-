@@ -23,6 +23,8 @@ use Igniter\Local\Models\Location;
 use Igniter\Reservation\Models\Reservation;
 use Igniter\User\Models\Customer;
 use Igniter\User\Models\CustomerGroup;
+use Igniter\User\Models\User;
+use Igniter\User\Models\UserRole;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -124,6 +126,26 @@ class VondoMarketplaceDemoSeeder extends Seeder
                 foreach (['min_delivery_order' => 20 + ($index % 3) * 5, 'delivery_charge' => 2.5 + ($index % 3), 'delivery_radius_km' => 12, 'prep_time_minutes' => 20 + ($index % 3) * 5, 'delivery_lead_time_minutes' => 35 + ($index % 3) * 5, 'scheduled_order_start_hour' => 10, 'scheduled_order_end_hour' => 22] as $key => $value) {
                     RestaurantLocationSetting::query()->updateOrCreate(['restaurant_id' => $restaurant->getKey(), 'location_id' => $location->getKey(), 'key' => $key], ['value' => $value]);
                 }
+                // A tenant-bound manager lets the vendor mobile app demonstrate
+                // location-scoped order, reservation, and availability workflows.
+                $managerEmail = "ops-{$restaurant->slug}@vondo.local";
+                $manager = User::query()->firstOrNew(['email' => $managerEmail]);
+                $manager->forceFill([
+                    'name' => "{$name} Demo Manager",
+                    'username' => "ops_".str_replace('-', '_', $restaurant->slug),
+                    'password' => 'DemoManager!2026',
+                    'user_role_id' => UserRole::query()->orderBy('user_role_id')->value('user_role_id'),
+                    'super_user' => false,
+                    'status' => true,
+                    'is_activated' => true,
+                    'activated_at' => now(),
+                ])->save();
+                $restaurant->memberships()->updateOrCreate(['user_id' => $manager->getKey()], [
+                    'role' => 'manager',
+                    'status' => 'active',
+                    'location_ids' => [$location->getKey()],
+                ]);
+                $manager->locations()->syncWithoutDetaching([$location->getKey()]);
                 // Six categories and thirty dishes per restaurant: 144 categories and 720 dishes.
                 $categories = collect(['Popular', 'Starters', 'Mains', 'Sides', 'Desserts', 'Drinks'])->map(function (string $name, int $priority) use ($restaurant) {
                     $category = Category::query()->firstOrNew(['restaurant_id' => $restaurant->getKey(), 'name' => $name]);

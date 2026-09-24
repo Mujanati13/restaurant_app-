@@ -2,6 +2,8 @@
 import { useDiscovery, type DiscoveryRestaurant, type CuisineItem } from '~/composables/useDiscovery'
 import RestaurantCard from './RestaurantCard.vue'
 
+const { t } = useLocale()
+
 const {
   selectedAddress,
   selectedCoordinates,
@@ -122,17 +124,17 @@ const handleUseGpsHero = async () => {
     <section class="marketplace-hero">
       <div class="container hero-container">
         <div class="hero-content">
-          <p class="hero-eyebrow"><i class="ri-e-bike-2-line" /> Local restaurants, one easy order</p>
+          <p class="hero-eyebrow"><i class="ri-e-bike-2-line" /> {{ t('hero.eyebrow') }}</p>
           <h1 class="hero-title">
-            Good food,<br /><span>delivered your way.</span>
+            {{ t('hero.title') }}<br /><span>{{ t('hero.titleAccent') }}</span>
           </h1>
-          <p class="hero-support">Discover nearby restaurants, choose delivery or pickup, and order in a few simple steps.</p>
+          <p class="hero-support">{{ t('hero.support') }}</p>
 
           <!-- Address Bar -->
           <div class="hero-address-bar">
             <div class="address-card-heading">
-              <span>Start with your address</span>
-              <span class="address-card-secure"><i class="ri-shield-check-line" /> Secure checkout</span>
+              <span>{{ t('hero.addressHeading') }}</span>
+              <span class="address-card-secure"><i class="ri-shield-check-line" /> {{ t('hero.secure') }}</span>
             </div>
             <!-- Delivery / Pickup Switcher -->
             <div class="fulfilment-toggle" role="tablist" aria-label="Order fulfilment type">
@@ -145,7 +147,7 @@ const handleUseGpsHero = async () => {
                 @click="toggleOrderType('delivery')"
               >
                 <i class="ri-e-bike-2-fill" />
-                <span>Delivery</span>
+                <span>{{ t('hero.delivery') }}</span>
               </button>
               <button
                 type="button"
@@ -156,7 +158,7 @@ const handleUseGpsHero = async () => {
                 @click="toggleOrderType('collection')"
               >
                 <i class="ri-walk-fill" />
-                <span>Pickup</span>
+                <span>{{ t('hero.pickup') }}</span>
               </button>
             </div>
 
@@ -168,7 +170,7 @@ const handleUseGpsHero = async () => {
                 @click="isAddressModalOpen = true"
               >
                 <i class="ri-map-pin-2-fill address-pin-icon" />
-                <span class="trigger-val">{{ selectedAddress || 'Enter delivery address' }}</span>
+                <span class="trigger-val">{{ selectedAddress || t('hero.addressPlaceholder') }}</span>
               </button>
 
               <button
@@ -188,19 +190,19 @@ const handleUseGpsHero = async () => {
                 class="btn-find-food"
                 @click="isAddressModalOpen = true"
               >
-                Find Food
+                {{ t('hero.findFood') }}
               </button>
             </div>
           </div>
           <div class="hero-benefits" aria-label="Ordering benefits">
-            <span><i class="ri-store-2-line" /> Independent local kitchens</span>
-            <span><i class="ri-time-line" /> Order when it suits you</span>
+            <span><i class="ri-store-2-line" /> {{ t('hero.localKitchens') }}</span>
+            <span><i class="ri-time-line" /> {{ t('hero.flexible') }}</span>
           </div>
           <p v-if="gpsError" role="alert" class="location-notice">{{ gpsError }}</p>
         </div>
         <a v-if="heroRestaurant" class="hero-food" :href="heroRestaurant.subdomain_url">
           <img :src="heroRestaurant.cover_photo_url!" :alt="heroRestaurant.name" fetchpriority="high" />
-          <span class="hero-food-caption"><i class="ri-restaurant-2-line" /> Explore local favourites</span>
+          <span class="hero-food-caption"><i class="ri-restaurant-2-line" /> {{ t('hero.explore') }}</span>
         </a>
         <div v-else class="hero-editorial" aria-hidden="true">
           <i class="ri-restaurant-2-fill" />

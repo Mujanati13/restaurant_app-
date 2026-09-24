@@ -2,6 +2,7 @@
 import { useActiveTenant, tenantHref } from '~/composables/useTenant'
 
 const tenant = useActiveTenant()
+const { t } = useLocale()
 const cart = useTenantCart()
 const mobileOpen = ref(false)
 const cartOpen = ref(false)
@@ -77,6 +78,7 @@ const rootStyle = computed(() => ({
           :class="['primary-nav', { open: mobileOpen }]"
           aria-label="Primary navigation"
         >
+          <LanguageSelector />
           <NuxtLink
             v-for="item in tenant.brand.navigation"
             :key="item.href"
@@ -86,11 +88,11 @@ const rootStyle = computed(() => ({
             {{ item.label }}
           </NuxtLink>
           <NuxtLink :to="tenantHref('/account')" @click="mobileOpen = false">
-            <i class="ri-user-3-line" /> Account
+            <i class="ri-user-3-line" /> {{ t('nav.account') }}
           </NuxtLink>
           <button class="cart-link cart-button" type="button" :aria-expanded="cartOpen" aria-controls="cart-drawer" @click="cartOpen = true; mobileOpen = false">
             <i class="ri-shopping-bag-3-line" />
-            <span>Cart</span>
+            <span>{{ t('nav.cart') }}</span>
             <span class="cart-count">{{ cart.count }}</span>
           </button>
         </nav>
@@ -102,23 +104,23 @@ const rootStyle = computed(() => ({
     </main>
 
     <div v-if="cartOpen" class="cart-backdrop" @click.self="cartOpen = false">
-      <aside id="cart-drawer" class="cart-drawer" role="dialog" aria-modal="true" aria-label="Your cart" tabindex="-1" @keydown.esc="cartOpen = false">
-        <div class="cart-drawer-head"><h2>Your order</h2><button class="icon-btn" type="button" aria-label="Close cart" @click="cartOpen = false">×</button></div>
-        <p v-if="!cart.lines.value.length">Your cart is empty. Add a dish to get started.</p>
+      <aside id="cart-drawer" class="cart-drawer" role="dialog" aria-modal="true" :aria-label="t('cart.title')" tabindex="-1" @keydown.esc="cartOpen = false">
+        <div class="cart-drawer-head"><h2>{{ t('cart.title') }}</h2><button class="icon-btn" type="button" aria-label="Close cart" @click="cartOpen = false">×</button></div>
+        <p v-if="!cart.lines.value.length">{{ t('cart.empty') }}</p>
         <div v-else class="cart-drawer-lines">
           <article v-for="line in cart.lines.value" :key="line.line_id">
             <div><strong>{{ line.name }}</strong><small v-if="line.note">{{ line.note }}</small><small>{{ line.quantity }} × {{ Number(line.price).toFixed(2) }}</small></div>
             <div class="cart-line-actions"><button type="button" aria-label="Decrease quantity" @click="cart.setQuantity(line.line_id, line.quantity - 1)">−</button><span>{{ line.quantity }}</span><button type="button" aria-label="Increase quantity" @click="cart.setQuantity(line.line_id, line.quantity + 1)">+</button></div>
           </article>
-          <div class="cart-drawer-total"><strong>Subtotal</strong><strong>{{ tenant.currency.symbol }}{{ cart.subtotal.value.toFixed(2) }}</strong></div>
-          <NuxtLink class="btn primary" :to="tenantHref('/checkout')" @click="cartOpen = false">Go to checkout</NuxtLink>
+          <div class="cart-drawer-total"><strong>{{ t('cart.subtotal') }}</strong><strong>{{ tenant.currency.symbol }}{{ cart.subtotal.value.toFixed(2) }}</strong></div>
+          <NuxtLink class="btn primary" :to="tenantHref('/checkout')" @click="cartOpen = false">{{ t('cart.checkout') }}</NuxtLink>
         </div>
       </aside>
     </div>
 
     <NuxtLink v-if="cart.count.value" class="mobile-cart-bar" :to="tenantHref('/checkout')">
       <span><i class="ri-shopping-bag-3-line" /> {{ cart.count.value }} item{{ cart.count.value === 1 ? '' : 's' }}</span>
-      <strong>View cart</strong>
+      <strong>{{ t('cart.view') }}</strong>
     </NuxtLink>
 
     <!-- Multi-Column Restaurant Footer -->

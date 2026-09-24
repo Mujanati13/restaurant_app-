@@ -2,6 +2,7 @@
 import { useIsMarketplace, useTenant } from '~/composables/useTenant'
 
 const isMarketplace = useIsMarketplace()
+const { locale } = useLocale()
 const { data: bootstrap, status, error, refresh } = await useTenant()
 const route = useRoute()
 const tenant = computed(() => bootstrap.value?.data)
@@ -67,6 +68,7 @@ useSeoMeta({
 })
 
 useHead({
+  htmlAttrs: { lang: locale },
   link: [
     { rel: 'canonical', href: canonical },
     { rel: 'manifest', href: '/manifest.webmanifest' },

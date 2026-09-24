@@ -118,10 +118,15 @@ export function useActiveTenant() {
 
 export function useStorefrontHeaders() {
   const slug = useTenantSlug()
+  const { locale } = useLocale()
   const forwarded = import.meta.server
     ? useRequestHeaders(['host', 'x-forwarded-host', 'x-forwarded-proto'])
     : {}
-  return { ...forwarded, ...(slug.value ? { 'X-Vondo-Restaurant': slug.value } : {}) }
+  return {
+    ...forwarded,
+    'Accept-Language': locale.value,
+    ...(slug.value ? { 'X-Vondo-Restaurant': slug.value } : {}),
+  }
 }
 
 export function tenantHref(href: string) {

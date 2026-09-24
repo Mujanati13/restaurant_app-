@@ -3,6 +3,7 @@ import { useDiscovery } from '~/composables/useDiscovery'
 import AddressModal from '~/components/discovery/AddressModal.vue'
 
 const { selectedAddress, isAddressModalOpen } = useDiscovery()
+const { t } = useLocale()
 const portalUrl = useRuntimeConfig().public.ownerPortalUrl as string
 const mobileNavOpen = ref(false)
 </script>
@@ -33,12 +34,12 @@ const mobileNavOpen = ref(false)
           @click="isAddressModalOpen = true"
         >
           <i class="ri-map-pin-2-fill pill-pin" />
-          <span class="pill-address">{{ selectedAddress || 'Choose your address' }}</span>
+          <span class="pill-address">{{ selectedAddress || t('address.choose') }}</span>
           <i class="ri-arrow-down-s-line pill-arrow" />
         </button>
 
         <!-- Right Actions -->
-        <div class="header-actions"><a :href="portalUrl" class="header-link">For restaurants <i class="ri-arrow-right-up-line" /></a></div>
+        <div class="header-actions"><LanguageSelector /><a :href="portalUrl" class="header-link">{{ t('nav.restaurants') }} <i class="ri-arrow-right-up-line" /></a></div>
       </div>
     </header>
 

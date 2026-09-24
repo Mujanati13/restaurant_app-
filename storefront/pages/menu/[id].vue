@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { MenuDetail } from '~/types/storefront'
 
+const { t } = useLocale()
 const route = useRoute()
 const tenant = useActiveTenant()
 const cart = useTenantCart()
@@ -29,6 +30,11 @@ const selectionHint = (option: MenuDetail['options'][number]) => {
   if (option.max_selected && option.min_selected) return `Choose ${option.min_selected}–${option.max_selected}`
   if (option.max_selected) return `Choose up to ${option.max_selected}`
   return option.required ? 'Choose one' : 'Choose any that you like'
+}
+const localizedSelectionHint = (option: MenuDetail['options'][number]) => {
+  if (option.max_selected && option.min_selected) return `${t('menu.required')}: ${option.min_selected}-${option.max_selected}`
+  if (option.max_selected) return `${t('menu.optional')}: 0-${option.max_selected}`
+  return t(option.required ? 'menu.required' : 'menu.optional')
 }
 
 function toggle(option: MenuDetail['options'][number], value: MenuDetail['options'][number]['values'][number], checked: boolean) {
@@ -87,24 +93,24 @@ useSeoMeta({ title: () => data.value?.data ? `${data.value.data.name} — ${tena
         </div>
         <div class="menu-detail-content">
           <div class="detail-top-row">
-            <NuxtLink class="back-to-menu" to="/menu"><i class="ri-arrow-left-line" /> Back to menu</NuxtLink>
-            <button class="favorite-button" type="button" :disabled="favoriteBusy" :aria-label="isFavorite ? 'Remove from favourites' : 'Save favourite'" @click="toggleFavorite"><i :class="isFavorite ? 'ri-heart-fill' : 'ri-heart-line'" /><span>{{ isFavorite ? 'Saved' : 'Save' }}</span></button>
+            <NuxtLink class="back-to-menu" to="/menu"><i class="ri-arrow-left-line" /> {{ t('menu.back') }}</NuxtLink>
+            <button class="favorite-button" type="button" :disabled="favoriteBusy" :aria-label="isFavorite ? 'Remove from favourites' : 'Save favourite'" @click="toggleFavorite"><i :class="isFavorite ? 'ri-heart-fill' : 'ri-heart-line'" /><span>{{ isFavorite ? t('menu.saved') : t('menu.save') }}</span></button>
           </div>
-          <span class="menu-item-kicker">Made to order</span>
+          <span class="menu-item-kicker">{{ t('menu.madeToOrder') }}</span>
           <h1>{{ data.data.name }}</h1>
           <p class="menu-detail-description">{{ data.data.description }}</p>
-          <div class="price-summary"><span>Starting at</span><strong class="detail-price">{{ formatPrice(data.data.price) }}</strong></div>
+          <div class="price-summary"><span>{{ t('menu.startingAt') }}</span><strong class="detail-price">{{ formatPrice(data.data.price) }}</strong></div>
           <section v-for="option in data.data.options" :key="option.id" class="option-group">
-            <div class="option-group-heading"><div><h2>{{ option.name }} <small :class="{ required: option.required }">{{ option.required ? 'Required' : 'Optional' }}</small></h2><p>{{ selectionHint(option) }}</p></div></div>
+            <div class="option-group-heading"><div><h2>{{ option.name }} <small :class="{ required: option.required }">{{ option.required ? t('menu.required') : t('menu.optional') }}</small></h2><p>{{ localizedSelectionHint(option) }}</p></div></div>
             <div v-for="value in option.values" :key="value.id" class="option-row" :class="{ selected: selected[option.id]?.[value.id] }">
               <label v-if="option.display_type !== 'quantity'"><input :type="option.display_type === 'radio' ? 'radio' : 'checkbox'" :name="`option-${option.id}`" @change="toggle(option, value, ($event.target as HTMLInputElement).checked)"> <span>{{ value.name }}</span></label>
               <label v-else><span>{{ value.name }}</span><input class="quantity-input" type="number" min="0" :max="option.max_selected || 50" value="0" @input="quantity(option, value, Number(($event.target as HTMLInputElement).value))"></label>
               <span v-if="value.price" class="option-price">+{{ formatPrice(value.price) }}</span>
             </div>
           </section>
-          <label class="option-group special-instructions"><div class="option-group-heading"><div><h2>Special instructions <small>Optional</small></h2><p>Let the kitchen know about preferences or allergies.</p></div><span>{{ note.length }}/300</span></div><textarea v-model="note" maxlength="300" rows="3" placeholder="e.g. no onions, sauce on the side" /></label>
+          <label class="option-group special-instructions"><div class="option-group-heading"><div><h2>{{ t('menu.instructions') }} <small>{{ t('menu.optional') }}</small></h2><p>{{ t('menu.instructionsHelp') }}</p></div><span>{{ note.length }}/300</span></div><textarea v-model="note" maxlength="300" rows="3" placeholder="e.g. no onions, sauce on the side" /></label>
           <p v-if="choiceError" class="notice error" role="alert">{{ choiceError }}</p>
-          <div class="add-to-cart-bar"><div><span>Total</span><strong>{{ formatPrice(configuredPrice) }}</strong></div><button class="btn primary add-to-cart-button" type="button" @click="addConfigured"><i class="ri-shopping-bag-3-line" /> Add to cart</button></div>
+          <div class="add-to-cart-bar"><div><span>{{ t('menu.total') }}</span><strong>{{ formatPrice(configuredPrice) }}</strong></div><button class="btn primary add-to-cart-button" type="button" @click="addConfigured"><i class="ri-shopping-bag-3-line" /> {{ t('menu.addToCart') }}</button></div>
         </div>
       </article>
     </AsyncState>
