@@ -625,6 +625,57 @@ class TenantIsolationTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_owner_stripe_credentials_are_encrypted_redacted_and_tenant_scoped(): void
+    {
+        $owner = User::query()->where('email', 'owner@vondo.local')->firstOrFail();
+        $token = $this->staffToken($owner, $this->restaurantA);
+        $secret = 'sk_test_51DeliverianoTenantSecret';
+
+        $this->withTenant($this->restaurantA)->withToken($token)
+            ->patchJson('/api/v1/owner/restaurant', ['settings' => [
+                'payments_stripe_enabled' => true,
+                'payments_stripe_test_mode' => true,
+                'payments_stripe_publishable_key' => 'pk_test_51DeliverianoTenantPublic',
+                'payments_stripe_secret_key' => $secret,
+                'payments_stripe_webhook_secret' => 'whsec_51DeliverianoTenantWebhook',
+            ]])
+            ->assertOk()
+            ->assertJsonPath('data.settings.payments_stripe_secret_key_configured', true)
+            ->assertJsonPath('data.settings.payments_stripe_webhook_secret_configured', true)
+            ->assertJsonMissing(['payments_stripe_secret_key' => $secret]);
+
+        $stored = \App\Platform\Models\RestaurantSetting::query()
+            ->where('restaurant_id', $this->restaurantA->getKey())
+            ->where('key', 'payments_stripe_secret_key')->firstOrFail()->getRawOriginal('value');
+        $this->assertStringNotContainsString($secret, $stored);
+
+        $this->withTenant($this->restaurantA)->getJson('/api/v1/storefront/bootstrap')
+            ->assertOk()
+            ->assertJsonPath('data.payment_methods.1.code', 'stripe')
+            ->assertJsonPath('data.payment_methods.1.publishable_key', 'pk_test_51DeliverianoTenantPublic')
+            ->assertJsonMissing(['payments_stripe_secret_key' => $secret]);
+
+        $this->withTenant($this->restaurantB)->withToken($token)
+            ->getJson('/api/v1/owner/restaurant')->assertForbidden();
+    }
+
+    public function test_owner_cannot_enable_stripe_with_mixed_test_and_live_credentials(): void
+    {
+        $owner = User::query()->where('email', 'owner@vondo.local')->firstOrFail();
+        $token = $this->staffToken($owner, $this->restaurantA);
+
+        $this->withTenant($this->restaurantA)->withToken($token)
+            ->patchJson('/api/v1/owner/restaurant', ['settings' => [
+                'payments_stripe_enabled' => true,
+                'payments_stripe_test_mode' => false,
+                'payments_stripe_publishable_key' => 'pk_test_51DeliverianoTenantPublic',
+                'payments_stripe_secret_key' => 'sk_test_51DeliverianoTenantSecret',
+                'payments_stripe_webhook_secret' => 'whsec_51DeliverianoTenantWebhook',
+            ]])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['settings.payments_stripe_publishable_key', 'settings.payments_stripe_secret_key']);
+    }
+
     public function test_storefront_analytics_events_are_namespaced_by_restaurant(): void
     {
         $sessionId = (string) Str::uuid();

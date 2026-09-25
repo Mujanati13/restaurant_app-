@@ -430,15 +430,16 @@ class StorefrontCommerceController extends Controller
         $secret = trim((string)($settings['payments_stripe_webhook_secret'] ?? ''));
         abort_if($secret === '', 503, 'Stripe webhook verification is not configured.');
         $signature = (string)$request->header('Stripe-Signature');
-        $parts = collect(explode(',', $signature))->mapWithKeys(function (string $part): array {
+        $parts = collect(explode(',', $signature))->map(function (string $part): array {
             [$key, $value] = array_pad(explode('=', trim($part), 2), 2, '');
-            return [$key => $value];
+            return ['key' => $key, 'value' => $value];
         });
-        $timestamp = $parts->get('t');
-        $received = $parts->get('v1');
-        abort_unless($timestamp && $received && abs(time() - (int)$timestamp) <= 300, 400, 'Invalid Stripe signature.');
+        $timestampPart = $parts->firstWhere('key', 't');
+        $timestamp = $timestampPart['value'] ?? null;
+        $received = $parts->where('key', 'v1')->pluck('value');
+        abort_unless($timestamp && $received->isNotEmpty() && abs(time() - (int)$timestamp) <= 300, 400, 'Invalid Stripe signature.');
         $expected = hash_hmac('sha256', $timestamp.'.'.$payload, $secret);
-        abort_unless(hash_equals($expected, $received), 400, 'Invalid Stripe signature.');
+        abort_unless($received->contains(fn(string $value): bool => hash_equals($expected, $value)), 400, 'Invalid Stripe signature.');
         $event = json_decode($payload, true);
 
         if (!$event || !isset($event['type'])) {
@@ -447,6 +448,7 @@ class StorefrontCommerceController extends Controller
 
         if ($event['type'] === 'checkout.session.completed') {
             $session = $event['data']['object'] ?? [];
+            if (($session['payment_status'] ?? null) !== 'paid') return response()->json(['received' => true]);
             $orderId = $session['client_reference_id'] ?? ($session['metadata']['order_id'] ?? null);
             if ($orderId) {
                 $order = Order::query()->where('restaurant_id', $this->tenant->id())->find($orderId);
@@ -594,7 +596,8 @@ class StorefrontCommerceController extends Controller
             'cod' => filter_var($settings['payments_cod_enabled'] ?? true, FILTER_VALIDATE_BOOLEAN),
             'card_on_delivery' => filter_var($settings['payments_card_on_delivery_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN),
             'stripe' => filter_var($settings['payments_stripe_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN)
-                && !empty($settings['payments_stripe_publishable_key']) && !empty($settings['payments_stripe_secret_key']),
+                && !empty($settings['payments_stripe_publishable_key']) && !empty($settings['payments_stripe_secret_key'])
+                && !empty($settings['payments_stripe_webhook_secret']),
             'bank_transfer' => filter_var($settings['payments_bank_transfer_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN),
             default => false,
         };

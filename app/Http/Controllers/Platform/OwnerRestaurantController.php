@@ -17,6 +17,7 @@ use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class OwnerRestaurantController extends Controller
 {
@@ -27,6 +28,12 @@ class OwnerRestaurantController extends Controller
         $this->authorizeOwner($request, 'dashboard.view');
         $restaurant = $this->tenant->get();
         $settings = $restaurant->settings()->get()->mapWithKeys(fn(RestaurantSetting $s) => [$s->key => $s->value]);
+        foreach (['payments_stripe_secret_key', 'payments_stripe_webhook_secret', 'payments_paypal_secret'] as $key) {
+            if (array_key_exists($key, $settings)) {
+                $settings[$key.'_configured'] = filled($settings[$key]);
+                unset($settings[$key]);
+            }
+        }
 
         $locations = \Igniter\Local\Models\Location::query()->where('restaurant_id', $restaurant->getKey())->get();
         $missingLocationCoords = [];
@@ -85,6 +92,11 @@ class OwnerRestaurantController extends Controller
             'listing_description' => ['sometimes', 'nullable', 'string', 'max:1000'],
             'cover_photo_url' => ['sometimes', 'nullable', 'url:http,https', 'max:500'],
             'settings' => ['sometimes', 'array'],
+            'settings.payments_stripe_enabled' => ['sometimes', 'boolean'],
+            'settings.payments_stripe_test_mode' => ['sometimes', 'boolean'],
+            'settings.payments_stripe_publishable_key' => ['sometimes', 'nullable', 'string', 'max:255', 'regex:/^pk_(?:test|live)_[A-Za-z0-9_]+$/'],
+            'settings.payments_stripe_secret_key' => ['sometimes', 'nullable', 'string', 'max:255', 'regex:/^sk_(?:test|live)_[A-Za-z0-9_]+$/'],
+            'settings.payments_stripe_webhook_secret' => ['sometimes', 'nullable', 'string', 'max:255', 'regex:/^whsec_[A-Za-z0-9_]+$/'],
         ]);
 
         $restaurant = $this->tenant->get();
@@ -99,7 +111,15 @@ class OwnerRestaurantController extends Controller
         }
 
         if (isset($data['settings']) && is_array($data['settings'])) {
-            foreach ($data['settings'] as $key => $val) {
+            $settings = $data['settings'];
+            $this->validateStripeConfiguration($restaurant, $settings);
+
+            foreach ($settings as $key => $val) {
+                // These flags are response metadata, never persisted configuration.
+                if (str_ends_with((string)$key, '_configured')) continue;
+                // A blank secret means "keep the securely saved value". Owners rotate a
+                // credential by entering a replacement, without ever receiving the old one.
+                if (RestaurantSetting::isSensitiveKey((string)$key) && blank($val)) continue;
                 RestaurantSetting::query()->updateOrCreate(
                     ['restaurant_id' => $restaurant->getKey(), 'key' => $key],
                     ['value' => $val]
@@ -109,6 +129,36 @@ class OwnerRestaurantController extends Controller
 
         $this->audit($request, 'restaurant.settings_updated', ['fields' => array_keys($data)]);
         return $this->show($request);
+    }
+
+    /** @param array<string, mixed> $settings */
+    private function validateStripeConfiguration($restaurant, array $settings): void
+    {
+        $existing = $restaurant->settings()->get()->mapWithKeys(fn(RestaurantSetting $s) => [$s->key => $s->value])->all();
+        $stripe = array_replace($existing, array_intersect_key($settings, array_flip([
+            'payments_stripe_enabled', 'payments_stripe_test_mode', 'payments_stripe_publishable_key',
+            'payments_stripe_secret_key', 'payments_stripe_webhook_secret',
+        ])));
+
+        // Blank secret fields preserve the stored credentials rather than erasing them.
+        foreach (['payments_stripe_secret_key', 'payments_stripe_webhook_secret'] as $key) {
+            if (blank($stripe[$key] ?? null) && filled($existing[$key] ?? null)) $stripe[$key] = $existing[$key];
+        }
+
+        if (!filter_var($stripe['payments_stripe_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN)) return;
+
+        $mode = filter_var($stripe['payments_stripe_test_mode'] ?? true, FILTER_VALIDATE_BOOLEAN) ? 'test' : 'live';
+        $errors = [];
+        if (!is_string($stripe['payments_stripe_publishable_key'] ?? null) || !str_starts_with($stripe['payments_stripe_publishable_key'], "pk_{$mode}_")) {
+            $errors['settings.payments_stripe_publishable_key'] = ["A Stripe {$mode} publishable key is required before card payments can be enabled."];
+        }
+        if (!is_string($stripe['payments_stripe_secret_key'] ?? null) || !str_starts_with($stripe['payments_stripe_secret_key'], "sk_{$mode}_")) {
+            $errors['settings.payments_stripe_secret_key'] = ["A Stripe {$mode} secret key is required before card payments can be enabled."];
+        }
+        if (!is_string($stripe['payments_stripe_webhook_secret'] ?? null) || !str_starts_with($stripe['payments_stripe_webhook_secret'], 'whsec_')) {
+            $errors['settings.payments_stripe_webhook_secret'] = ['A Stripe webhook signing secret is required before card payments can be enabled.'];
+        }
+        if ($errors) throw ValidationException::withMessages($errors);
     }
 
     public function addDomain(Request $request): JsonResponse

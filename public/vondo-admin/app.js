@@ -4130,8 +4130,9 @@ function TeamView({ data, ownerBootstrap, request, notify, refreshView }) {
 
 function PaymentSettingsView({ restaurant, request, notify, bootstrapSession, refreshView }) {
   const [saving, setSaving] = useState(false);
-  const [showStripeKey, setShowStripeKey] = useState(false);
   const settings = restaurant?.settings || {};
+  const primaryDomain = restaurant?.domains?.find(domain => domain.is_primary)?.host || `${restaurant?.slug || 'restaurant'}.deliveriano.ch`;
+  const stripeWebhookEndpoint = `https://${primaryDomain}/api/v1/storefront/webhooks/stripe`;
 
   const handleSavePayments = async (e) => {
     e.preventDefault();
@@ -4139,6 +4140,9 @@ function PaymentSettingsView({ restaurant, request, notify, bootstrapSession, re
     const form = e.currentTarget;
     const formData = new FormData(form);
 
+    const stripeSecretKey = String(formData.get('payments_stripe_secret_key') || '').trim();
+    const stripeWebhookSecret = String(formData.get('payments_stripe_webhook_secret') || '').trim();
+    const paypalSecret = String(formData.get('payments_paypal_secret') || '').trim();
     const newSettings = {
       ...settings,
       // Cash on Delivery
@@ -4157,14 +4161,11 @@ function PaymentSettingsView({ restaurant, request, notify, bootstrapSession, re
       payments_stripe_enabled: formData.get('payments_stripe_enabled') === 'on',
       payments_stripe_test_mode: formData.get('payments_stripe_test_mode') === 'on',
       payments_stripe_publishable_key: formData.get('payments_stripe_publishable_key') || '',
-      payments_stripe_secret_key: formData.get('payments_stripe_secret_key') || '',
-      payments_stripe_webhook_secret: formData.get('payments_stripe_webhook_secret') || '',
 
       // PayPal
       payments_paypal_enabled: formData.get('payments_paypal_enabled') === 'on',
       payments_paypal_sandbox: formData.get('payments_paypal_sandbox') === 'on',
       payments_paypal_client_id: formData.get('payments_paypal_client_id') || '',
-      payments_paypal_secret: formData.get('payments_paypal_secret') || '',
 
       // Direct Bank Transfer / Wire
       payments_bank_transfer_enabled: formData.get('payments_bank_transfer_enabled') === 'on',
@@ -4173,6 +4174,11 @@ function PaymentSettingsView({ restaurant, request, notify, bootstrapSession, re
       payments_bank_account_number: formData.get('payments_bank_account_number') || '',
       payments_bank_routing_number: formData.get('payments_bank_routing_number') || '',
     };
+    // Private credentials are intentionally never returned by the API. Omitting a
+    // blank field keeps the existing encrypted credential; entering a value rotates it.
+    if (stripeSecretKey) newSettings.payments_stripe_secret_key = stripeSecretKey;
+    if (stripeWebhookSecret) newSettings.payments_stripe_webhook_secret = stripeWebhookSecret;
+    if (paypalSecret) newSettings.payments_paypal_secret = paypalSecret;
 
     try {
       await request('/api/v1/owner/restaurant', {
@@ -4261,6 +4267,13 @@ function PaymentSettingsView({ restaurant, request, notify, bootstrapSession, re
                   h(Chip, { label: 'G Pay', size: 'small', color: 'default', sx: { fontWeight: 700 } })
                 )
               ),
+              h(Grid, { item: true, xs: 12 },
+                h(Alert, { severity: 'info', variant: 'outlined' },
+                  h(Typography, { variant: 'body2', fontWeight: 700 }, 'Restaurant-specific Stripe webhook endpoint'),
+                  h(Typography, { component: 'code', variant: 'body2', sx: { display: 'block', mt: .5, wordBreak: 'break-all' } }, stripeWebhookEndpoint),
+                  h(Typography, { variant: 'caption', color: 'text.secondary' }, 'Add this endpoint in this restaurant’s Stripe Dashboard and listen for checkout.session.completed.')
+                )
+              ),
               h(Grid, { item: true, xs: 12, sm: 6 },
                 h(FormControlLabel, {
                   control: h(Checkbox, { name: 'payments_stripe_test_mode', defaultChecked: settings.payments_stripe_test_mode !== false }),
@@ -4285,28 +4298,28 @@ function PaymentSettingsView({ restaurant, request, notify, bootstrapSession, re
                 h(TextField, {
                   label: 'Stripe Secret Key',
                   name: 'payments_stripe_secret_key',
-                  type: showStripeKey ? 'text' : 'password',
-                  defaultValue: settings.payments_stripe_secret_key || '',
+                  type: 'password',
+                  defaultValue: '',
                   placeholder: 'sk_live_... or sk_test_...',
                   size: 'small',
                   fullWidth: true,
-                  helperText: 'Private backend secret key used to charge cards'
+                  helperText: settings.payments_stripe_secret_key_configured
+                    ? 'Saved securely. Leave blank to keep it, or enter a replacement to rotate it.'
+                    : 'Required to enable card payments. It is encrypted and never shown again.'
                 })
-              ),
-              h(Grid, { item: true, xs: 12, sm: 4, sx: { display: 'flex', alignItems: 'center' } },
-                h(Button, { size: 'small', variant: 'outlined', onClick: () => setShowStripeKey(!showStripeKey) },
-                  showStripeKey ? 'Hide Secret Key' : 'Show Secret Key'
-                )
               ),
               h(Grid, { item: true, xs: 12 },
                 h(TextField, {
-                  label: 'Stripe Webhook Secret (optional)',
+                  label: 'Stripe Webhook Signing Secret',
                   name: 'payments_stripe_webhook_secret',
-                  defaultValue: settings.payments_stripe_webhook_secret || '',
+                  type: 'password',
+                  defaultValue: '',
                   placeholder: 'whsec_...',
                   size: 'small',
                   fullWidth: true,
-                  helperText: 'Used to verify instant payment webhooks'
+                  helperText: settings.payments_stripe_webhook_secret_configured
+                    ? 'Saved securely. Leave blank to keep it, or enter a replacement to rotate it.'
+                    : 'Required to verify completed card payments from Stripe.'
                 })
               )
             )
