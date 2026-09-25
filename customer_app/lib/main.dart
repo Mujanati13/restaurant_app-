@@ -27,41 +27,81 @@ class _VondoCustomerAppState extends State<VondoCustomerApp> {
   @override
   void initState() {
     super.initState();
-    _mobileServices = VondoMobileServices(tenant: widget.controller.api.restaurantKey,
-      onLink: (link) { if (!mounted) return; setState(() => _deepLinkIndex = switch (link.target) {
-        VondoLinkTarget.menu => 0, VondoLinkTarget.order => 2, VondoLinkTarget.reservation => 3, _ => 0 }); },
-      onPushToken: (token, platform) async { if (widget.controller.api.session != null) {
-        await widget.controller.api.registerPushToken(endpointPrefix: 'storefront', token: token, platform: platform,
-          topics: ['restaurant.${widget.controller.api.restaurantKey}.customer']);
-      } });
+    _mobileServices = VondoMobileServices(
+      tenant: widget.controller.api.restaurantKey,
+      onLink: (link) {
+        if (!mounted) return;
+        setState(
+          () => _deepLinkIndex = switch (link.target) {
+            VondoLinkTarget.menu => 0,
+            VondoLinkTarget.order => 2,
+            VondoLinkTarget.reservation => 3,
+            _ => 0,
+          },
+        );
+      },
+      onPushToken: (token, platform) async {
+        if (widget.controller.api.session != null) {
+          await widget.controller.api.registerPushToken(
+            endpointPrefix: 'storefront',
+            token: token,
+            platform: platform,
+            topics: [
+              'restaurant.${widget.controller.api.restaurantKey}.customer',
+            ],
+          );
+        }
+      },
+    );
     unawaited(_mobileServices!.start());
   }
 
   @override
-  void dispose() { final service = _mobileServices; if (service != null) unawaited(service.dispose()); super.dispose(); }
+  void dispose() {
+    final service = _mobileServices;
+    if (service != null) unawaited(service.dispose());
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: widget.controller,
     builder: (context, _) {
       final controller = widget.controller;
-      if (controller.signedIn && !_pushSynced) { _pushSynced = true; final service = _mobileServices; if (service != null) unawaited(service.syncPushToken()); }
+      if (controller.signedIn && !_pushSynced) {
+        _pushSynced = true;
+        final service = _mobileServices;
+        if (service != null) unawaited(service.syncPushToken());
+      }
       if (!controller.signedIn) _pushSynced = false;
       final brand = controller.brand;
-      final sharedTheme = brand == null ? null : TenantTheme(primary: brand.primary,
-        background: brand.background, surface: brand.surface, text: brand.text);
+      final sharedTheme = brand == null
+          ? null
+          : TenantTheme(
+              primary: brand.primary,
+              background: brand.background,
+              surface: brand.surface,
+              text: brand.text,
+            );
       return MaterialApp(
         debugShowCheckedModeBanner: false,
-        title: brand?.name ?? 'Vondo',
+        title: brand?.name ?? 'Deliveriano Customer',
         theme: tenantThemeData(sharedTheme),
-        home: CustomerShell(controller: controller, initialIndex: _deepLinkIndex),
+        home: CustomerShell(
+          controller: controller,
+          initialIndex: _deepLinkIndex,
+        ),
       );
     },
   );
 }
 
 class CustomerShell extends StatefulWidget {
-  const CustomerShell({super.key, required this.controller, this.initialIndex = 0});
+  const CustomerShell({
+    super.key,
+    required this.controller,
+    this.initialIndex = 0,
+  });
   final AppController controller;
   final int initialIndex;
 
@@ -75,7 +115,8 @@ class _CustomerShellState extends State<CustomerShell> {
   @override
   void didUpdateWidget(covariant CustomerShell oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.initialIndex != widget.initialIndex) index = widget.initialIndex;
+    if (oldWidget.initialIndex != widget.initialIndex)
+      index = widget.initialIndex;
   }
 
   @override
@@ -114,17 +155,59 @@ class _CustomerShellState extends State<CustomerShell> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          controller.brand!.name,
-          style: const TextStyle(fontWeight: FontWeight.w900),
+        toolbarHeight: 76,
+        title: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary,
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: const Icon(
+                Icons.restaurant_menu_rounded,
+                color: Colors.white,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(controller.brand!.name, overflow: TextOverflow.ellipsis),
+                  Text(
+                    'Order food & reserve a table',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: .55),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
         actions: [
-          IconButton(
-            onPressed: () => setState(() => index = 1),
-            icon: Badge(
-              label: Text('${controller.cartCount}'),
-              isLabelVisible: controller.cartCount > 0,
-              child: const Icon(Icons.shopping_bag_outlined),
+          Padding(
+            padding: const EdgeInsetsDirectional.only(end: 12),
+            child: IconButton.filled(
+              style: IconButton.styleFrom(
+                backgroundColor: const Color(0xff201d1a),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => setState(() => index = 1),
+              icon: Badge(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                textColor: Colors.white,
+                label: Text('${controller.cartCount}'),
+                isLabelVisible: controller.cartCount > 0,
+                child: const Icon(Icons.shopping_bag_outlined),
+              ),
             ),
           ),
         ],
@@ -181,23 +264,66 @@ class MenuPage extends StatelessWidget {
             : 2;
         return RefreshIndicator(
           onRefresh: controller.initialize,
-          child: GridView.builder(
-            padding: const EdgeInsets.all(14),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: columns,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: .72,
-            ),
-            itemCount: controller.menus.length,
-            itemBuilder: (context, index) {
-              final menu = controller.menus[index];
-              return MenuCard(
-                menu: menu,
-                symbol: controller.brand!.currencySymbol,
-                add: () => showMenuConfiguration(context, controller, menu),
-              );
-            },
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 20, 18, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'FRESH FROM THE KITCHEN',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.1,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Browse the menu',
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -.6,
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Tap a dish to customise it your way.',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: .6),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 20),
+                sliver: SliverGrid(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: columns,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: .72,
+                  ),
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    final menu = controller.menus[index];
+                    return MenuCard(
+                      menu: menu,
+                      symbol: controller.brand!.currencySymbol,
+                      add: () =>
+                          showMenuConfiguration(context, controller, menu),
+                    );
+                  }, childCount: controller.menus.length),
+                ),
+              ),
+            ],
           ),
         );
       },
@@ -232,13 +358,13 @@ class MenuCard extends StatelessWidget {
                   menu.image!,
                   fit: BoxFit.cover,
                   errorBuilder: (_, _, _) => const ColoredBox(
-                    color: Color(0xffffe7db),
+                    color: Color(0xffeaf7ef),
                     child: Icon(Icons.restaurant, size: 42),
                   ),
                 ),
         ),
         Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.fromLTRB(13, 12, 10, 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -261,10 +387,17 @@ class MenuCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       '$symbol${menu.price.toStringAsFixed(2)}',
-                      style: const TextStyle(fontWeight: FontWeight.w900),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
                     ),
                   ),
                   IconButton.filled(
+                    style: IconButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Colors.white,
+                    ),
                     onPressed: add,
                     tooltip: 'Add to cart',
                     icon: const Icon(Icons.add),
@@ -1225,6 +1358,41 @@ class _AccountPageState extends State<AccountPage> {
                               : 'Sign in',
                         ),
                       ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          const Expanded(child: Divider()),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: Text(
+                              'OR',
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: .5),
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 1,
+                                  ),
+                            ),
+                          ),
+                          const Expanded(child: Divider()),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      OutlinedButton.icon(
+                        onPressed: busy ? null : signInWithGoogle,
+                        icon: const Text(
+                          'G',
+                          style: TextStyle(
+                            color: Color(0xff4285f4),
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        label: const Text('Continue with Google'),
+                      ),
                       TextButton(
                         onPressed: () => setState(() => register = !register),
                         child: Text(
@@ -1268,6 +1436,19 @@ class _AccountPageState extends State<AccountPage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Signed in successfully.')));
+    }
+  }
+
+  Future<void> signInWithGoogle() async {
+    setState(() => busy = true);
+    final success = await widget.controller.loginWithGoogle();
+    if (mounted) {
+      setState(() => busy = false);
+      if (success) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Signed in with Google.')));
+      }
     }
   }
 }

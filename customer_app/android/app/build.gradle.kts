@@ -70,7 +70,7 @@ android {
         create("universal") {
             dimension = "tenant"
             applicationId = "com.vondo.customer"
-            resValue("string", "app_name", "Vondo")
+            resValue("string", "app_name", "Deliveriano Customer")
             manifestPlaceholders["vondoUrlScheme"] = "vondo"
             manifestPlaceholders["vondoAppHost"] = "localhost"
         }

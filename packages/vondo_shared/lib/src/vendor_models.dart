@@ -7,12 +7,14 @@ class VendorBrand {
     required this.surface,
     required this.background,
     required this.text,
+    this.currencyCode = 'CHF',
   });
   final String name;
   final String primary;
   final String surface;
   final String background;
   final String text;
+  final String currencyCode;
 
   factory VendorBrand.fromJson(Map<String, dynamic> restaurant) {
     final brand = Map<String, dynamic>.from(
@@ -29,12 +31,19 @@ class VendorBrand {
       surface: theme.surface,
       background: theme.background,
       text: theme.text,
+      currencyCode: (restaurant['currency_code'] ?? 'CHF') as String,
     );
   }
 
-  Map<String, dynamic> toJson() => {'identity': {'name': name}, 'theme': {
-    'primary': primary, 'surface': surface, 'background': background, 'text': text,
-  }};
+  Map<String, dynamic> toJson() => {
+    'identity': {'name': name},
+    'theme': {
+      'primary': primary,
+      'surface': surface,
+      'background': background,
+      'text': text,
+    },
+  };
 }
 
 class VendorLocation {
@@ -56,7 +65,12 @@ class VendorLocation {
     address: (json['address'] ?? '') as String,
     isOpen: json['is_open'] == true,
   );
-  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'address': address, 'is_open': isOpen};
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'address': address,
+    'is_open': isOpen,
+  };
 }
 
 class VendorStatus {
@@ -124,11 +138,21 @@ class VendorBootstrap {
 
   Map<String, dynamic> toJson() => {
     'staff': {'name': staffName, 'email': staffEmail},
-    'restaurant': {'name': brand.name, 'brand': brand.toJson()},
+    'restaurant': {
+      'name': brand.name,
+      'currency_code': brand.currencyCode,
+      'brand': brand.toJson(),
+    },
     'locations': locations.map((item) => item.toJson()).toList(),
     'order_statuses': orderStatuses.map((item) => item.toJson()).toList(),
-    'reservation_statuses': reservationStatuses.map((item) => item.toJson()).toList(),
-    'capabilities': {'orders': canManageOrders, 'reservations': canManageReservations, 'menus': canManageMenus},
+    'reservation_statuses': reservationStatuses
+        .map((item) => item.toJson())
+        .toList(),
+    'capabilities': {
+      'orders': canManageOrders,
+      'reservations': canManageReservations,
+      'menus': canManageMenus,
+    },
   };
 }
 

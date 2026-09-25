@@ -22,18 +22,20 @@ class CustomerSession extends TenantSession {
 class CustomerApi extends TenantApiClient {
   CustomerApi({String? baseUrl, String? restaurantKey})
     : super(
-        baseUrl: (baseUrl ??
-                  const String.fromEnvironment(
-                    'VONDO_API_URL',
-                    defaultValue: 'https://backend.deliveriano.ch/api',
-                  ))
-              .trim()
-              .replaceFirst(RegExp(r'/+$'), ''),
-        restaurantKey: restaurantKey ??
-          const String.fromEnvironment(
-            'VONDO_RESTAURANT',
-            defaultValue: 'default',
-          ),
+        baseUrl:
+            (baseUrl ??
+                    const String.fromEnvironment(
+                      'VONDO_API_URL',
+                      defaultValue: 'https://backend.deliveriano.ch/api',
+                    ))
+                .trim()
+                .replaceFirst(RegExp(r'/+$'), ''),
+        restaurantKey:
+            restaurantKey ??
+            const String.fromEnvironment(
+              'VONDO_RESTAURANT',
+              defaultValue: 'default',
+            ),
       );
 
   @override
@@ -58,8 +60,19 @@ class CustomerApi extends TenantApiClient {
       body: {
         'email': email,
         'password': password,
-        'device_name': 'Vondo Customer Mobile',
+        'device_name': 'Deliveriano Customer Mobile',
       },
+    );
+    final session = CustomerSession.fromJson(response);
+    this.session = session;
+    return session;
+  }
+
+  Future<CustomerSession> loginWithGoogle(String idToken) async {
+    final response = await _request(
+      'POST',
+      '/v1/storefront/google',
+      body: {'id_token': idToken, 'device_name': 'Deliveriano Customer Mobile'},
     );
     final session = CustomerSession.fromJson(response);
     this.session = session;
@@ -184,8 +197,15 @@ class CustomerApi extends TenantApiClient {
     String? idempotencyKey,
   }) async {
     try {
-      return await requestJson(method, path, token: token, body: body, idempotent: idempotent,
-        retryAfterRefresh: retryAfterRefresh, idempotencyKey: idempotencyKey);
+      return await requestJson(
+        method,
+        path,
+        token: token,
+        body: body,
+        idempotent: idempotent,
+        retryAfterRefresh: retryAfterRefresh,
+        idempotencyKey: idempotencyKey,
+      );
     } on TenantApiException catch (error) {
       throw ApiException(error.message, status: error.statusCode);
     }

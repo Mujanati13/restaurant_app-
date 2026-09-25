@@ -21,6 +21,7 @@ use App\Http\Controllers\Platform\OwnerRegistrationController;
 use App\Http\Controllers\Platform\StorefrontTenantController;
 use App\Http\Controllers\Platform\SuperAdminRestaurantController;
 use App\Http\Controllers\Platform\StorefrontLoginController;
+use App\Http\Controllers\Platform\StorefrontGoogleLoginController;
 use App\Http\Controllers\Platform\VendorLoginController;
 use App\Http\Controllers\Platform\StorefrontCommerceController;
 use App\Http\Controllers\Platform\OwnerRestaurantController;
@@ -103,6 +104,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('bootstrap', [StorefrontTenantController::class, 'bootstrap']);
         Route::post('register', [StorefrontRegistrationController::class, 'store'])->middleware('throttle:6,1');
         Route::post('token', [StorefrontLoginController::class, 'store'])->middleware('throttle:6,1');
+        Route::post('google', [StorefrontGoogleLoginController::class, 'store'])->middleware('throttle:6,1');
         Route::post('refresh', [SessionRefreshController::class, 'storefront'])->middleware('throttle:12,1');
         Route::get('categories', [StorefrontTenantController::class, 'categories']);
         Route::get('menus', [StorefrontTenantController::class, 'menus']);

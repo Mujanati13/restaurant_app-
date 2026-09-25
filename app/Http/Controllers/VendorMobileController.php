@@ -47,6 +47,7 @@ class VendorMobileController extends Controller
                     'id' => $this->tenant->get()->public_id,
                     'name' => $this->tenant->get()->name,
                     'slug' => $this->tenant->get()->slug,
+                    'currency_code' => $this->tenant->get()->currency_code ?: 'CHF',
                     'brand' => BrandConfiguration::publicPayload(
                         $this->tenant->get()->publishedBrand()?->configuration
                             ?? BrandConfiguration::defaults($this->tenant->get()->name)

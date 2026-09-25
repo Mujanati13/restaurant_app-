@@ -42,7 +42,7 @@ class VendorApi extends TenantApiClient {
       body: {
         'email': email,
         'password': password,
-        'device_name': 'Vondo Vendor Mobile ($restaurantKey)',
+        'device_name': 'Deliveriano Vendor Mobile ($restaurantKey)',
       },
     );
     final session = VendorSession.fromJson(response);

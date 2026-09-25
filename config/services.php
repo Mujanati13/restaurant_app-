@@ -25,6 +25,13 @@ return [
         'token' => env('POSTMARK_TOKEN'),
     ],
 
+    'google' => [
+        // IDs are public identifiers. Keep OAuth client secrets out of this app.
+        'client_ids' => array_values(array_filter(array_map('trim', explode(',', (string) env(
+            'GOOGLE_OAUTH_CLIENT_IDS', env('GOOGLE_OAUTH_WEB_CLIENT_ID', '')
+        ))))),
+    ],
+
     'ses' => [
         'key' => env('AWS_ACCESS_KEY_ID'),
         'secret' => env('AWS_SECRET_ACCESS_KEY'),

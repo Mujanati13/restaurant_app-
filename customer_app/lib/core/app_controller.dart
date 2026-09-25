@@ -3,13 +3,19 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:vondo_shared/vondo_shared.dart';
 import 'customer_api.dart';
+import 'google_customer_sign_in.dart';
 import 'models.dart';
 
 class AppController extends ChangeNotifier {
-  AppController(this.api, {FlutterSecureStorage? storage})
-    : storage = storage ?? const FlutterSecureStorage();
+  AppController(
+    this.api, {
+    FlutterSecureStorage? storage,
+    GoogleCustomerSignIn? googleSignIn,
+  }) : storage = storage ?? const FlutterSecureStorage(),
+       googleSignIn = googleSignIn ?? GoogleCustomerSignIn();
   final CustomerApi api;
   final FlutterSecureStorage storage;
+  final GoogleCustomerSignIn googleSignIn;
   TenantBrand? brand;
   String? token;
   List<MenuItem> menus = [];
@@ -77,6 +83,25 @@ class AppController extends ChangeNotifier {
   Future<bool> login(String email, String password) async {
     try {
       final session = await api.login(email.trim(), password);
+      await _storeSession(session);
+      api.configureSession(session, onChanged: _storeSession);
+      error = null;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> loginWithGoogle() async {
+    try {
+      final idToken = await googleSignIn.authenticate();
+      if (idToken == null) {
+        return false;
+      }
+      final session = await api.loginWithGoogle(idToken);
       await _storeSession(session);
       api.configureSession(session, onChanged: _storeSession);
       error = null;

@@ -36,12 +36,29 @@ class _VondoVendorAppState extends State<VondoVendorApp> {
     if (widget.restoreSession) widget.controller.restore();
     _mobileServices = VondoMobileServices(
       tenant: widget.controller.api.restaurantKey,
-      onLink: (link) { if (!mounted) return; setState(() => _deepLinkIndex = switch (link.target) {
-        VondoLinkTarget.order => 1, VondoLinkTarget.reservation => 2, VondoLinkTarget.menu => 3, _ => 0 }); },
-      onPushToken: (token, platform) async { if (widget.controller.api.session != null) {
-        await widget.controller.api.registerPushToken(endpointPrefix: 'vendor', token: token, platform: platform,
-          topics: ['restaurant.${widget.controller.api.restaurantKey}.operations']);
-      } },
+      onLink: (link) {
+        if (!mounted) return;
+        setState(
+          () => _deepLinkIndex = switch (link.target) {
+            VondoLinkTarget.order => 1,
+            VondoLinkTarget.reservation => 2,
+            VondoLinkTarget.menu => 3,
+            _ => 0,
+          },
+        );
+      },
+      onPushToken: (token, platform) async {
+        if (widget.controller.api.session != null) {
+          await widget.controller.api.registerPushToken(
+            endpointPrefix: 'vendor',
+            token: token,
+            platform: platform,
+            topics: [
+              'restaurant.${widget.controller.api.restaurantKey}.operations',
+            ],
+          );
+        }
+      },
     );
     unawaited(_mobileServices!.start());
   }
@@ -57,16 +74,26 @@ class _VondoVendorAppState extends State<VondoVendorApp> {
   @override
   Widget build(BuildContext context) {
     final configuration = widget.controller.bootstrapData?.brand;
-    final sharedTheme = configuration == null ? null : TenantTheme(primary: configuration.primary,
-      background: configuration.background, surface: configuration.surface, text: configuration.text);
-    if (widget.controller.isSignedIn && !_pushSynced) { _pushSynced = true; final service = _mobileServices; if (service != null) unawaited(service.syncPushToken()); }
+    final sharedTheme = configuration == null
+        ? null
+        : TenantTheme(
+            primary: configuration.primary,
+            background: configuration.background,
+            surface: configuration.surface,
+            text: configuration.text,
+          );
+    if (widget.controller.isSignedIn && !_pushSynced) {
+      _pushSynced = true;
+      final service = _mobileServices;
+      if (service != null) unawaited(service.syncPushToken());
+    }
     if (!widget.controller.isSignedIn) _pushSynced = false;
     return MaterialApp(
       title:
           configuration?.name ??
           const String.fromEnvironment(
             'VONDO_APP_NAME',
-            defaultValue: 'Vondo Vendor',
+            defaultValue: 'Deliveriano Vendor',
           ),
       debugShowCheckedModeBanner: false,
       theme: tenantThemeData(sharedTheme),
@@ -79,7 +106,10 @@ class _VondoVendorAppState extends State<VondoVendorApp> {
             );
           }
           return widget.controller.isSignedIn
-              ? VendorShell(controller: widget.controller, initialIndex: _deepLinkIndex)
+              ? VendorShell(
+                  controller: widget.controller,
+                  initialIndex: _deepLinkIndex,
+                )
               : LoginPage(controller: widget.controller);
         },
       ),
@@ -133,24 +163,37 @@ class _LoginPageState extends State<LoginPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const CircleAvatar(
-                      radius: 36,
-                      backgroundColor: Color(0xffffe3d8),
-                      child: Icon(
+                    Container(
+                      width: 76,
+                      height: 76,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.primary.withValues(alpha: .25),
+                            blurRadius: 22,
+                            offset: const Offset(0, 9),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
                         Icons.restaurant_rounded,
-                        size: 40,
-                        color: Color(0xffc95028),
+                        size: 38,
+                        color: Colors.white,
                       ),
                     ),
                     const SizedBox(height: 24),
                     Text(
-                      'Vondo Vendor',
+                      'Deliveriano for restaurants',
                       style: Theme.of(context).textTheme.headlineMedium
                           ?.copyWith(fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Run your restaurant from one calm, fast workspace.',
+                      'Orders, tables and menu availability in one place.',
                       style: Theme.of(
                         context,
                       ).textTheme.bodyLarge?.copyWith(color: Colors.black54),
@@ -232,7 +275,11 @@ class _LoginPageState extends State<LoginPage> {
 }
 
 class VendorShell extends StatefulWidget {
-  const VendorShell({super.key, required this.controller, this.initialIndex = 0});
+  const VendorShell({
+    super.key,
+    required this.controller,
+    this.initialIndex = 0,
+  });
   final SessionController controller;
   final int initialIndex;
 
@@ -246,7 +293,8 @@ class _VendorShellState extends State<VendorShell> {
   @override
   void didUpdateWidget(covariant VendorShell oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.initialIndex != widget.initialIndex) _index = widget.initialIndex;
+    if (oldWidget.initialIndex != widget.initialIndex)
+      _index = widget.initialIndex;
   }
 
   @override
@@ -268,9 +316,24 @@ class _VendorShellState extends State<VendorShell> {
     final titles = ['Overview', 'Orders', 'Reservations', 'Menu', 'More'];
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          titles[_index],
-          style: const TextStyle(fontWeight: FontWeight.w800),
+        toolbarHeight: 72,
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'RESTAURANT OPERATIONS',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1,
+              ),
+            ),
+            Text(
+              titles[_index],
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+          ],
         ),
         actions: [
           Padding(
@@ -348,7 +411,11 @@ class _LocationMenu extends StatelessWidget {
           )
           .toList(),
       child: Chip(
-        avatar: const Icon(Icons.storefront_outlined, size: 18),
+        avatar: Icon(
+          Icons.storefront_outlined,
+          size: 18,
+          color: Theme.of(context).colorScheme.primary,
+        ),
         label: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 130),
           child: Text(
@@ -428,10 +495,20 @@ class _DashboardPageState extends _VendorPageState<DashboardPage> {
           padding: const EdgeInsets.all(16),
           children: [
             Text(
+              'TODAY AT YOUR RESTAURANT',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.1,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
               'Good service starts here.',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w900,
+                letterSpacing: -.6,
+              ),
             ),
             const SizedBox(height: 4),
             Text(
@@ -439,7 +516,10 @@ class _DashboardPageState extends _VendorPageState<DashboardPage> {
               style: const TextStyle(color: Colors.black54),
             ),
             const SizedBox(height: 18),
-            _SalesCard(sales: data.sales),
+            _SalesCard(
+              sales: data.sales,
+              currencyCode: controller.bootstrapData!.brand.currencyCode,
+            ),
             const SizedBox(height: 14),
             GridView.count(
               crossAxisCount: MediaQuery.sizeOf(context).width > 600 ? 4 : 2,
@@ -453,25 +533,25 @@ class _DashboardPageState extends _VendorPageState<DashboardPage> {
                   icon: Icons.receipt_long,
                   label: 'Orders today',
                   value: '${data.ordersToday}',
-                  color: const Color(0xfff6a623),
+                  color: Theme.of(context).colorScheme.primary,
                 ),
                 _MetricCard(
                   icon: Icons.notifications_active,
                   label: 'Need action',
                   value: '${data.ordersWaiting}',
-                  color: const Color(0xffc95028),
+                  color: const Color(0xffdc4236),
                 ),
                 _MetricCard(
                   icon: Icons.event_seat,
                   label: 'Bookings today',
                   value: '${data.reservationsToday}',
-                  color: const Color(0xff4d8c77),
+                  color: const Color(0xff18794e),
                 ),
                 _MetricCard(
                   icon: Icons.schedule,
                   label: 'Upcoming guests',
                   value: '${data.upcomingReservations}',
-                  color: const Color(0xff6d67c8),
+                  color: const Color(0xff4f46c9),
                 ),
               ],
             ),
@@ -545,13 +625,19 @@ class _OrdersPageState extends _VendorPageState<OrdersPage> {
     itemBuilder: (context, order) => Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
-        onTap: () => _showOrderDetail(context, order),
+        onTap: () => _showOrderDetail(
+          context,
+          order,
+          controller.bootstrapData!.brand.currencyCode,
+        ),
         leading: CircleAvatar(
-          backgroundColor: const Color(0xffffe3d8),
+          backgroundColor: Theme.of(
+            context,
+          ).colorScheme.primary.withValues(alpha: .14),
           child: Text(
             order.number.replaceFirst('#', ''),
-            style: const TextStyle(
-              color: Color(0xff9d371d),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.primary,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -570,7 +656,7 @@ class _OrdersPageState extends _VendorPageState<OrdersPage> {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
-              '${order.total.toStringAsFixed(2)} MAD',
+              '${controller.bootstrapData!.brand.currencyCode} ${order.total.toStringAsFixed(2)}',
               style: const TextStyle(fontWeight: FontWeight.w800),
             ),
             OutlinedButton(
@@ -654,9 +740,14 @@ class _ReservationsPageState extends _VendorPageState<ReservationsPage> {
     itemBuilder: (context, reservation) => Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
-        leading: const CircleAvatar(
-          backgroundColor: Color(0xffdceee7),
-          child: Icon(Icons.event_seat, color: Color(0xff34745f)),
+        leading: CircleAvatar(
+          backgroundColor: Theme.of(
+            context,
+          ).colorScheme.primary.withValues(alpha: .14),
+          child: Icon(
+            Icons.event_seat,
+            color: Theme.of(context).colorScheme.primary,
+          ),
         ),
         title: Text(
           reservation.guestName,
@@ -749,13 +840,15 @@ class _MenuPageState extends _VendorPageState<MenuPage> {
         ),
         subtitle: Text(
           menu.description.isEmpty
-              ? '${menu.price.toStringAsFixed(2)} MAD'
-              : '${menu.description}\n${menu.price.toStringAsFixed(2)} MAD',
+              ? '${controller.bootstrapData!.brand.currencyCode} ${menu.price.toStringAsFixed(2)}'
+              : '${menu.description}\n${controller.bootstrapData!.brand.currencyCode} ${menu.price.toStringAsFixed(2)}',
         ),
         isThreeLine: menu.description.isNotEmpty,
         secondary: Icon(
           menu.isAvailable ? Icons.check_circle : Icons.remove_circle_outline,
-          color: menu.isAvailable ? const Color(0xff34745f) : Colors.black38,
+          color: menu.isAvailable
+              ? Theme.of(context).colorScheme.primary
+              : Colors.black38,
         ),
       ),
     ),
@@ -780,9 +873,12 @@ class MorePage extends StatelessWidget {
         ),
       ),
       const SizedBox(height: 12),
-      const Card(
+      Card(
         child: ListTile(
-          leading: Icon(Icons.notifications_outlined),
+          leading: Icon(
+            Icons.notifications_outlined,
+            color: Theme.of(context).colorScheme.primary,
+          ),
           title: Text('Notifications'),
           subtitle: Text('Push alerts arrive in the next release.'),
         ),
@@ -790,7 +886,10 @@ class MorePage extends StatelessWidget {
       const SizedBox(height: 12),
       Card(
         child: ListTile(
-          leading: const Icon(Icons.logout, color: Color(0xffc95028)),
+          leading: Icon(
+            Icons.logout,
+            color: Theme.of(context).colorScheme.error,
+          ),
           title: const Text('Sign out'),
           onTap: controller.logout,
         ),
@@ -847,13 +946,14 @@ class _AsyncList<T> extends StatelessWidget {
 }
 
 class _SalesCard extends StatelessWidget {
-  const _SalesCard({required this.sales});
+  const _SalesCard({required this.sales, required this.currencyCode});
   final double sales;
+  final String currencyCode;
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(20),
     decoration: BoxDecoration(
-      color: const Color(0xff29231f),
+      color: const Color(0xff201d1a),
       borderRadius: BorderRadius.circular(22),
     ),
     child: Column(
@@ -862,7 +962,7 @@ class _SalesCard extends StatelessWidget {
         const Text('Processed sales', style: TextStyle(color: Colors.white70)),
         const SizedBox(height: 7),
         Text(
-          '${sales.toStringAsFixed(2)} MAD',
+          '$currencyCode ${sales.toStringAsFixed(2)}',
           style: const TextStyle(
             color: Colors.white,
             fontSize: 30,
@@ -1014,7 +1114,11 @@ Future<VendorStatus?> _pickStatus(
   ),
 );
 
-void _showOrderDetail(BuildContext context, VendorOrder order) {
+void _showOrderDetail(
+  BuildContext context,
+  VendorOrder order,
+  String currencyCode,
+) {
   showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
@@ -1046,7 +1150,7 @@ void _showOrderDetail(BuildContext context, VendorOrder order) {
             ],
             const SizedBox(height: 12),
             Text(
-              '${order.total.toStringAsFixed(2)} MAD',
+              '$currencyCode ${order.total.toStringAsFixed(2)}',
               style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 20),
             ),
           ],
