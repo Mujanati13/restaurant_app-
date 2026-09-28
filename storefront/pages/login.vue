@@ -14,6 +14,8 @@ const error = ref('')
 const googleButton = ref<HTMLElement | null>(null)
 const form = reactive({ first_name: '', last_name: '', email: '', telephone: '', password: '', password_confirmation: '' })
 const googleClientId = String(config.public.googleClientId || '')
+const firebaseApiKey = String(config.public.firebaseApiKey || '')
+const googleEnabled = Boolean(googleClientId && firebaseApiKey)
 
 async function finish(session: any) {
   api.saveSession(session)
@@ -43,12 +45,28 @@ async function useGoogle(credential: string) {
   error.value = ''
   message.value = ''
   try {
-    const session = await api.request<any>('/google', {
-      method: 'POST', body: { id_token: credential, device_name: 'Deliveriano web' },
+    // Google Identity supplies a Google ID token. Exchange it with Firebase
+    // Authentication first so the API receives only a Firebase ID token.
+    const firebaseSession = await $fetch<{ idToken?: string }>(
+      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${encodeURIComponent(firebaseApiKey)}`,
+      {
+        method: 'POST',
+        body: {
+          postBody: `id_token=${encodeURIComponent(credential)}&providerId=google.com`,
+          requestUri: window.location.origin,
+          returnIdpCredential: false,
+          returnSecureToken: true,
+        },
+      },
+    )
+    if (!firebaseSession.idToken) throw new Error('Firebase did not return a sign-in token.')
+
+    const session = await api.request<any>('/firebase/google', {
+      method: 'POST', body: { id_token: firebaseSession.idToken, device_name: 'Deliveriano web' },
     })
     await finish(session)
   } catch (reason: any) {
-    error.value = reason?.data?.message || reason?.message || 'Google sign-in could not be completed.'
+    error.value = reason?.data?.message || reason?.message || 'Firebase Google sign-in could not be completed.'
   } finally {
     busy.value = false
   }
@@ -74,7 +92,7 @@ function loadGoogleIdentity(): Promise<void> {
 }
 
 onMounted(async () => {
-  if (!googleClientId || !googleButton.value) return
+  if (!googleEnabled || !googleButton.value) return
   try {
     await loadGoogleIdentity()
     window.google.accounts.id.initialize({
@@ -106,7 +124,7 @@ useSeoMeta({ title: () => `Account — ${tenant.value?.brand?.identity?.name || 
         </div>
         <p v-if="error" class="notice error" role="alert">{{ error }}</p>
         <p v-if="message" class="notice">{{ message }}</p>
-        <div v-if="googleClientId" class="google-auth">
+        <div v-if="googleEnabled" class="google-auth">
           <div ref="googleButton" class="google-auth-button" aria-label="Continue with Google" />
           <p>Use your Google account for a quick, secure sign-in.</p>
           <div class="auth-divider"><span>or continue with email</span></div>

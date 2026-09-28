@@ -647,7 +647,7 @@ class _OrdersPageState extends _VendorPageState<OrdersPage> {
           style: const TextStyle(fontWeight: FontWeight.w700),
         ),
         subtitle: Text(
-          '${order.type} · ${order.itemsCount} item${order.itemsCount == 1 ? '' : 's'}\n${order.statusName}',
+          '${order.type} · ${order.itemsCount} item${order.itemsCount == 1 ? '' : 's'}\n${order.statusName}${order.requiresConfirmation ? '\nConfirm within five minutes of order placement.' : ''}',
         ),
         isThreeLine: true,
         trailing: Column(
@@ -660,14 +660,14 @@ class _OrdersPageState extends _VendorPageState<OrdersPage> {
               style: const TextStyle(fontWeight: FontWeight.w800),
             ),
             OutlinedButton(
-              onPressed: () => _changeStatus(order),
+              onPressed: order.cancelledAt == null ? () => _changeStatus(order) : null,
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size(0, 28),
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 visualDensity: VisualDensity.compact,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-              child: const Text('Status'),
+              child: Text(order.requiresConfirmation ? 'Confirm' : 'Status'),
             ),
           ],
         ),

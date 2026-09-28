@@ -1,48 +1,54 @@
-# Google Sign-In
+# Firebase Google Sign-In for customer apps and the storefront
 
-Google sign-in is available to customers in the Nuxt storefront and the customer Flutter app. The Laravel API verifies the Google-issued ID token, creates a restaurant-scoped customer only when needed, and issues the normal Deliveriano access and refresh tokens.
+The customer Flutter app and Nuxt storefront sign customers in with Google through Firebase Authentication. Each sends Firebase's short-lived ID token to `POST /api/v1/storefront/firebase/google`; Laravel verifies the token signature, Firebase project ID, issuer, verified email, and the `google.com` provider before issuing the normal tenant-scoped Deliveriano session.
 
-## Google Cloud setup
+The previous `POST /api/v1/storefront/google` endpoint remains available for existing app releases and any non-Firebase client. A Firebase login can safely continue an account created through that endpoint only when the Firebase token contains the same Google subject. Matching email addresses alone never link accounts.
 
-1. In the Google Cloud project, complete the Google Auth branding screen and add `deliveriano.ch` as an authorized domain. Verify the root domain in Google Search Console with the Google account that owns the Cloud project.
-2. Create a **Web application** OAuth client. Add `https://deliveriano.ch` and every live restaurant domain, such as `https://chez-lucie.deliveriano.ch`, to **Authorized JavaScript origins**.
-3. Create an **Android** OAuth client for each Android application ID and add the SHA-1 fingerprints of its debug and release signing keys.
-4. Create an **iOS** OAuth client for each iOS bundle ID. Add its client ID, the web client ID as `GIDServerClientID`, and the generated reversed-client-ID URL scheme to the customer app's `ios/Runner/Info.plist` before building iOS.
+## Firebase console setup
 
-Google does not permit wildcard JavaScript origins, so `https://*.deliveriano.ch` cannot be registered. Each restaurant subdomain that exposes the web sign-in button must be registered as an exact origin. This is a Google security rule, not a DNS limitation. The Google Auth platform does allow `deliveriano.ch` as the authorized root domain after DNS verification.
+1. Create or select the Firebase project for the customer app, then enable **Authentication → Sign-in method → Google**.
+2. Register the Android and iOS app IDs used by each released flavor. Add the SHA-1/SHA-256 certificate fingerprints for every Android signing key.
+3. Create a Firebase **Web app** for the restaurant storefront. In Authentication settings, add every storefront domain (and `localhost` for development) to **Authorized domains**. In Google Cloud OAuth settings, add those domains as authorized JavaScript origins.
+4. Copy the Firebase project ID and the Web app's public API key into the Laravel environment. Do not add a Firebase service-account key to the app or this repository.
+5. Copy the public client values for the target Firebase app into that flavor's build command. `FIREBASE_WEB_CLIENT_ID` is the OAuth web client ID created for the Firebase project; it is used to obtain the Google credential before Firebase exchanges it.
+6. For iOS, add the Firebase-generated reversed client ID URL scheme to `ios/Runner/Info.plist` for the final bundle ID, alongside the app's existing deep-link scheme.
 
-## Deliveriano configuration
+## Server configuration
 
-Set these in the VPS `.env` file. Client IDs are public identifiers; do not put any Google client secret in this project.
+Set the Firebase project ID on the API host, then rebuild and cache configuration:
 
 ```dotenv
-GOOGLE_OAUTH_WEB_CLIENT_ID=YOUR_WEB_CLIENT_ID.apps.googleusercontent.com
-GOOGLE_OAUTH_CLIENT_IDS=YOUR_WEB_CLIENT_ID.apps.googleusercontent.com,YOUR_ANDROID_CLIENT_ID.apps.googleusercontent.com,YOUR_IOS_CLIENT_ID.apps.googleusercontent.com
+FIREBASE_PROJECT_ID=your-firebase-project-id
+FIREBASE_API_KEY=your-web-firebase-api-key
+GOOGLE_OAUTH_WEB_CLIENT_ID=your-web-oauth-client-id.apps.googleusercontent.com
 ```
 
-`GOOGLE_OAUTH_CLIENT_IDS` is the explicit audience allow-list used by Laravel when it verifies ID tokens. Keep only client IDs that belong to this Deliveriano Google Cloud project.
-
-Rebuild the VPS services and run the migration:
-
 ```bash
-cd ~/restaurant_app-
 docker compose up -d --build
-docker compose exec -T app php artisan migrate --force
 docker compose exec -T app php artisan config:cache
 ```
 
-Build the customer app with the web client ID as its server client ID:
+The Compose storefront exposes those two public values as `NUXT_PUBLIC_FIREBASE_API_KEY` and `NUXT_PUBLIC_GOOGLE_CLIENT_ID`. Its Google prompt exchanges the Google ID token with Firebase Authentication, then sends the Firebase ID token to `POST /api/v1/storefront/firebase/google`.
+
+## Customer-app build
+
+Build each branded app with the public Firebase values for its Android or iOS Firebase app:
 
 ```bash
 cd customer_app
 flutter build apk --release \
   --dart-define=VONDO_API_URL=https://backend.deliveriano.ch/api \
   --dart-define=VONDO_RESTAURANT=chez-lucie \
-  --dart-define=VONDO_GOOGLE_SERVER_CLIENT_ID=YOUR_WEB_CLIENT_ID.apps.googleusercontent.com
+  --dart-define=FIREBASE_PROJECT_ID=your-firebase-project-id \
+  --dart-define=FIREBASE_API_KEY=your-public-api-key \
+  --dart-define=FIREBASE_APP_ID=your-android-firebase-app-id \
+  --dart-define=FIREBASE_SENDER_ID=your-sender-id \
+  --dart-define=FIREBASE_WEB_CLIENT_ID=your-web-client-id.apps.googleusercontent.com \
+  --dart-define=FIREBASE_ANDROID_CLIENT_ID=your-android-client-id.apps.googleusercontent.com
 ```
 
-Use the same `VONDO_GOOGLE_SERVER_CLIENT_ID` define for iOS builds. Google’s Android setup must match the final app package ID and signing certificate, including white-label variants.
+Use the equivalent Firebase iOS app ID and bundle ID values for an iOS build. `VONDO_GOOGLE_SERVER_CLIENT_ID` is accepted as a temporary fallback for older build automation, but new build scripts should use `FIREBASE_WEB_CLIENT_ID`.
 
 ## Account safety
 
-Google authentication requires a signed, unexpired Google ID token with an allowed audience, a Google issuer, and a verified email. The unique Google subject is stored per restaurant. A Google sign-in never automatically attaches itself to an existing password account with the same email, and it never creates or promotes restaurant staff accounts.
+The API accepts only a signed, unexpired Firebase Authentication ID token whose audience is the configured Firebase project, whose issuer is `https://securetoken.google.com/<project-id>`, and whose sign-in provider is Google. Customer API sessions remain separate, short-lived Deliveriano tokens; the Firebase token is not stored or used as an API bearer token.

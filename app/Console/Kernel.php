@@ -16,6 +16,7 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule)
     {
         $schedule->job(new \App\Jobs\RecordQueueHeartbeat)->everyMinute()->name('vondo-queue-heartbeat');
+        $schedule->command('vondo:expire-unconfirmed-orders')->everyMinute()->withoutOverlapping();
         $schedule->command('vondo:prune-build-artifacts')->dailyAt('03:20')->withoutOverlapping();
         $schedule->command('vondo:monitor')->everyFiveMinutes()->withoutOverlapping();
         $schedule->command('vondo:renew-domain-tls')->hourly()->withoutOverlapping();

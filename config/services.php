@@ -32,6 +32,11 @@ return [
         ))))),
     ],
 
+    'firebase' => [
+        // Used to validate Firebase Authentication ID tokens server-side.
+        'project_id' => env('FIREBASE_PROJECT_ID'),
+    ],
+
     'ses' => [
         'key' => env('AWS_ACCESS_KEY_ID'),
         'secret' => env('AWS_SECRET_ACCESS_KEY'),

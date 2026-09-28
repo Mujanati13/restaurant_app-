@@ -1,38 +1,55 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:vondo_shared/vondo_shared.dart';
 
-/// Starts an explicit Google sign-in and returns the verifiable ID token.
-/// The token is never treated as a local session; Laravel verifies it first.
-class GoogleCustomerSignIn {
-  GoogleCustomerSignIn({GoogleSignIn? client})
+/// Signs a customer in with Google through Firebase Authentication.
+///
+/// The returned Firebase ID token is never used as a local app session. The
+/// API validates it and returns the existing tenant-scoped session instead.
+class FirebaseGoogleCustomerSignIn {
+  FirebaseGoogleCustomerSignIn({GoogleSignIn? client, FirebaseAuth? auth})
     : _client =
           client ??
           GoogleSignIn(
             scopes: const ['email', 'openid', 'profile'],
-            serverClientId: const String.fromEnvironment(
-              'VONDO_GOOGLE_SERVER_CLIENT_ID',
-            ),
-          );
+            serverClientId: FirebaseAppConfiguration.googleServerClientId,
+          ),
+      _auth = auth;
 
   final GoogleSignIn _client;
+  final FirebaseAuth? _auth;
 
   Future<String?> authenticate() async {
-    const serverClientId = String.fromEnvironment(
-      'VONDO_GOOGLE_SERVER_CLIENT_ID',
-    );
-    if (serverClientId.isEmpty) {
-      throw StateError('Google sign-in is not configured for this app build.');
+    if (!FirebaseAppConfiguration.isConfigured ||
+        FirebaseAppConfiguration.googleServerClientId.isEmpty) {
+      throw StateError(
+        'Firebase Google sign-in is not configured for this app build.',
+      );
     }
+
+    await FirebaseAppConfiguration.initialize();
 
     final account = await _client.signIn();
     if (account == null) {
       return null;
     }
     final authentication = await account.authentication;
-    final idToken = authentication.idToken;
-    if (idToken == null || idToken.isEmpty) {
-      throw StateError('Google did not return an identity token.');
+    if (authentication.idToken == null || authentication.idToken!.isEmpty) {
+      throw StateError('Google did not return an identity token for Firebase.');
     }
 
-    return idToken;
+    final credential = GoogleAuthProvider.credential(
+      accessToken: authentication.accessToken,
+      idToken: authentication.idToken,
+    );
+    final user = (await (_auth ?? FirebaseAuth.instance).signInWithCredential(
+      credential,
+    )).user;
+    final firebaseIdToken = await user?.getIdToken();
+    if (firebaseIdToken == null || firebaseIdToken.isEmpty) {
+      throw StateError('Firebase did not return an identity token.');
+    }
+
+    return firebaseIdToken;
   }
 }

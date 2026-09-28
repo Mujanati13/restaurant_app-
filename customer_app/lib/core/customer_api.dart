@@ -71,7 +71,7 @@ class CustomerApi extends TenantApiClient {
   Future<CustomerSession> loginWithGoogle(String idToken) async {
     final response = await _request(
       'POST',
-      '/v1/storefront/google',
+      '/v1/storefront/firebase/google',
       body: {'id_token': idToken, 'device_name': 'Deliveriano Customer Mobile'},
     );
     final session = CustomerSession.fromJson(response);

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Jobs\SendTenantPush;
 use App\Platform\Branding\BrandConfiguration;
+use App\Platform\Orders\OrderConfirmationWindow;
 use App\Platform\Models\RestaurantMembership;
 use App\Platform\Tenancy\TenantContext;
 use Igniter\Admin\Models\Status;
@@ -31,7 +32,10 @@ class VendorMobileController extends Controller
 
     private const string MENUS_ABILITY = 'menus:*';
 
-    public function __construct(private readonly TenantContext $tenant) {}
+    public function __construct(
+        private readonly TenantContext $tenant,
+        private readonly OrderConfirmationWindow $confirmationWindow,
+    ) {}
 
     public function bootstrap(Request $request): JsonResponse
     {
@@ -82,7 +86,7 @@ class VendorMobileController extends Controller
         $canManageReservations = $this->canManage($user, self::RESERVATIONS_ABILITY, 'Admin.Reservations');
 
         $orders = Order::query()->where('restaurant_id', $this->tenant->id())
-            ->where('location_id', $locationId)->whereDate('order_date', $today);
+            ->where('location_id', $locationId)->whereDate('order_date', $today)->whereNull('cancelled_at');
         $reservations = Reservation::query()->where('restaurant_id', $this->tenant->id())
             ->where('location_id', $locationId)->whereDate('reserve_date', $today);
 
@@ -143,12 +147,16 @@ class VendorMobileController extends Controller
         $order = Order::query()->where('restaurant_id', $this->tenant->id())
             ->where('location_id', $locationId)->findOrFail($orderId);
 
-        $history = $order->updateOrderStatus($status->getKey(), [
-            'staff_id' => $user->getKey(),
-            'comment' => $data['comment'] ?? null,
-            'notify' => $data['notify'] ?? (bool)$status->notify_customer,
-        ]);
-        abort_if($history === false, 409, 'The order status could not be updated.');
+        $updated = $this->confirmationWindow->updateStatus(
+            $order,
+            (int) $status->getKey(),
+            fn(Order $lockedOrder) => $lockedOrder->updateOrderStatus($status->getKey(), [
+                'staff_id' => $user->getKey(),
+                'comment' => $data['comment'] ?? null,
+                'notify' => $data['notify'] ?? (bool)$status->notify_customer,
+            ]),
+        );
+        abort_if(!$updated, 409, 'The order status could not be updated.');
         SendTenantPush::dispatch($this->tenant->id(), 'customer', 'Order updated', 'Your order status is now '.$status->status_name.'.',
             ['type' => 'order', 'id' => (string) $order->getKey(), 'route' => '/account/orders/'.$order->getKey()], (int) $order->customer_id);
 
@@ -351,8 +359,8 @@ class VendorMobileController extends Controller
             'type' => $order->order_type_name ?? $order->order_type ?? 'Standard',
             'scheduled_for' => $order->order_datetime?->toIso8601String() ?? ($order->order_date ? $order->order_date.' '.$order->order_time : null),
             'status_id' => (int)$order->status_id,
-            'status_name' => $order->status_name ?? $order->status?->status_name ?? 'New',
-            'status_color' => $order->status_color ?? $order->status?->status_color ?? '#b84f2e',
+            'status_name' => $order->cancelled_at ? 'Cancelled' : ($order->status_name ?? $order->status?->status_name ?? 'New'),
+            'status_color' => $order->cancelled_at ? '#b42318' : ($order->status_color ?? $order->status?->status_color ?? '#b84f2e'),
             'total' => (float)$order->order_total,
             'items_count' => (int)$order->total_items,
             'items' => $order->menus->map(fn($item) => [
@@ -386,6 +394,10 @@ class VendorMobileController extends Controller
             ]))) : null,
             'comment' => $order->comment,
             'created_at' => $order->created_at?->toIso8601String(),
+            'cancelled_at' => $order->cancelled_at?->toIso8601String(),
+            'cancel_reason' => $order->cancel_reason,
+            'confirmation_due_at' => $order->confirmation_due_at ? \Illuminate\Support\Carbon::parse($order->confirmation_due_at)->toIso8601String() : null,
+            'confirmed_at' => $order->confirmed_at ? \Illuminate\Support\Carbon::parse($order->confirmed_at)->toIso8601String() : null,
         ];
     }
 

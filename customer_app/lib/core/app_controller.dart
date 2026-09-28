@@ -10,12 +10,12 @@ class AppController extends ChangeNotifier {
   AppController(
     this.api, {
     FlutterSecureStorage? storage,
-    GoogleCustomerSignIn? googleSignIn,
+    FirebaseGoogleCustomerSignIn? googleSignIn,
   }) : storage = storage ?? const FlutterSecureStorage(),
-       googleSignIn = googleSignIn ?? GoogleCustomerSignIn();
+       googleSignIn = googleSignIn ?? FirebaseGoogleCustomerSignIn();
   final CustomerApi api;
   final FlutterSecureStorage storage;
-  final GoogleCustomerSignIn googleSignIn;
+  final FirebaseGoogleCustomerSignIn googleSignIn;
   TenantBrand? brand;
   String? token;
   List<MenuItem> menus = [];

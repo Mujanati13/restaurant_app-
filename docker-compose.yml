@@ -23,6 +23,7 @@ services:
       VONDO_ALLOW_TENANT_HEADER: "${VONDO_ALLOW_TENANT_HEADER:-false}"
       GOOGLE_OAUTH_WEB_CLIENT_ID: "${GOOGLE_OAUTH_WEB_CLIENT_ID:-}"
       GOOGLE_OAUTH_CLIENT_IDS: "${GOOGLE_OAUTH_CLIENT_IDS:-}"
+      FIREBASE_PROJECT_ID: "${FIREBASE_PROJECT_ID:-}"
       VONDO_API_HEALTH_URL: http://webserver/api/v1/health/live
       VONDO_STOREFRONT_HEALTH_URL: http://storefront:3000/health
     depends_on:
@@ -130,6 +131,7 @@ services:
       NUXT_API_INTERNAL_BASE: http://webserver/api
       NUXT_DEFAULT_RESTAURANT: ${VONDO_DEFAULT_RESTAURANT:-default}
       NUXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_OAUTH_WEB_CLIENT_ID:-}
+      NUXT_PUBLIC_FIREBASE_API_KEY: ${FIREBASE_API_KEY:-}
     networks:
       - tastyigniter-net
     depends_on:

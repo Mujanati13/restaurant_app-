@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "496792075677",
+    "project_id": "deliveriano-fd65d",
+    "storage_bucket": "deliveriano-fd65d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:496792075677:android:39dad8cb858010001d0374",
+        "android_client_info": {
+          "package_name": "com.vondo.customer"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCRYVXXEn-z0cyH3GygWWncMjcy4788wD0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

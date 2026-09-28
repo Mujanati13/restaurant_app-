@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Platform;
 
 use App\Jobs\SendTenantPush;
+use App\Platform\Orders\OrderConfirmationWindow;
 use App\Platform\Support\IdempotentRequest;
 use App\Platform\Support\TenantSettings;
 use App\Platform\Tenancy\TenantContext;
@@ -31,6 +32,7 @@ class StorefrontCommerceController extends Controller
         private readonly TenantContext $tenant,
         private readonly IdempotentRequest $idempotency,
         private readonly TenantSettings $settings,
+        private readonly OrderConfirmationWindow $confirmationWindow,
     ) {}
 
     public function orders(Request $request): JsonResponse
@@ -356,6 +358,7 @@ class StorefrontCommerceController extends Controller
                 'order_total' => $total,
             ])->saveQuietly();
 
+            $this->confirmationWindow->begin($order);
             $order->updateOrderStatus($order->status_id, ['notify' => true]);
             SendTenantPush::dispatch($this->tenant->id(), 'vendor', 'New order', 'A new order is ready for review.',
                 ['type' => 'order', 'id' => (string) $order->getKey(), 'route' => '/orders/'.$order->getKey()]);
@@ -639,6 +642,8 @@ class StorefrontCommerceController extends Controller
             ])->values(),
             'location' => $order->location?->location_name, 'created_at' => $order->created_at?->toIso8601String(),
             'cancelled_at' => $order->cancelled_at?->toIso8601String(), 'cancel_reason' => $order->cancel_reason,
+            'confirmation_due_at' => $order->confirmation_due_at ? Carbon::parse($order->confirmation_due_at)->toIso8601String() : null,
+            'confirmed_at' => $order->confirmed_at ? Carbon::parse($order->confirmed_at)->toIso8601String() : null,
             'payment_state' => $order->payment === 'stripe' ? ($order->processed ? 'paid' : 'pending') : 'pay_at_restaurant'];
     }
 

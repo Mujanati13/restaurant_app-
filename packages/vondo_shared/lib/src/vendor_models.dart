@@ -193,6 +193,10 @@ class VendorOrder {
     required this.itemsCount,
     required this.items,
     this.comment,
+    this.confirmationDueAt,
+    this.confirmedAt,
+    this.cancelledAt,
+    this.cancelReason,
   });
 
   final int id;
@@ -206,6 +210,13 @@ class VendorOrder {
   final int itemsCount;
   final List<String> items;
   final String? comment;
+  final String? confirmationDueAt;
+  final String? confirmedAt;
+  final String? cancelledAt;
+  final String? cancelReason;
+
+  bool get requiresConfirmation =>
+      confirmationDueAt != null && confirmedAt == null && cancelledAt == null;
 
   factory VendorOrder.fromJson(Map<String, dynamic> json) => VendorOrder(
     id: json['id'] as int,
@@ -222,6 +233,10 @@ class VendorOrder {
       return '${data['quantity'] ?? 1} × ${data['name'] ?? 'Item'}';
     }).toList(),
     comment: json['comment'] as String?,
+    confirmationDueAt: json['confirmation_due_at'] as String?,
+    confirmedAt: json['confirmed_at'] as String?,
+    cancelledAt: json['cancelled_at'] as String?,
+    cancelReason: json['cancel_reason'] as String?,
   );
 }
 

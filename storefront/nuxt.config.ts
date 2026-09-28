@@ -10,6 +10,7 @@ export default defineNuxtConfig({
     public: {
       apiBase: '/api',
       googleClientId: process.env.NUXT_PUBLIC_GOOGLE_CLIENT_ID || '',
+      firebaseApiKey: process.env.NUXT_PUBLIC_FIREBASE_API_KEY || '',
       ownerPortalUrl: 'https://backend.deliveriano.ch/vondo-admin',
       baseDomain: process.env.NUXT_BASE_DOMAIN || 'deliveriano.ch',
     },
